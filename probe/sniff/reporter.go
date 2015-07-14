@@ -58,20 +58,3 @@ func (r *Reporter) loop(hostID string, factory func() source, on, off time.Durat
 		}
 	}
 }
-
-func flipflop(quantum time.Duration, rate float64, sleep func(time.Duration)) (on, off chan struct{}) {
-	on, off = make(chan struct{}), make(chan struct{})
-	go func() {
-		var (
-			onTime  = time.Duration(float64(quantum) * rate)
-			offTime = quantum - onTime
-		)
-		for {
-			on <- struct{}{}
-			sleep(onTime)
-			off <- struct{}{}
-			sleep(offTime)
-		}
-	}()
-	return on, off
-}
