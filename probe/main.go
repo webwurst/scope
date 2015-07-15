@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/weaveworks/scope/probe/host"
 	"github.com/weaveworks/scope/probe/overlay"
 	"github.com/weaveworks/scope/probe/process"
+	"github.com/weaveworks/scope/probe/sniff"
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/xfer"
 )
@@ -36,6 +39,9 @@ func main() {
 		dockerBridge       = flag.String("docker.bridge", "docker0", "the docker bridge name")
 		weaveRouterAddr    = flag.String("weave.router.addr", "", "IP address or FQDN of the Weave router")
 		procRoot           = flag.String("proc.root", "/proc", "location of the proc filesystem")
+		captureEnabled     = flag.Bool("capture", false, "perform sampled packet capture")
+		captureInterfaces  = flag.String("capture.interfaces", interfaces(), "packet capture on these interfaces")
+		captureRate        = flag.Float64("capture.rate", 0.01, "packet capture sample rate (0 to 1)")
 	)
 	flag.Parse()
 
@@ -106,6 +112,16 @@ func main() {
 		reporters = append(reporters, weave)
 	}
 
+	if *captureEnabled {
+		if *captureRate <= 0.0 || *captureRate > 1.0 {
+			log.Fatalf("capture enabled, but invalid capture rate %.2f", *captureRate)
+		}
+		for _, iface := range strings.Split(*captureInterfaces, ",") {
+			log.Printf("packet capture on %s", iface)
+			reporters = append(reporters, sniff.NewReporter(hostID, sniff.NewSourceFactory(iface), *captureRate))
+		}
+	}
+
 	log.Printf("listening on %s", *listen)
 
 	quit := make(chan struct{})
@@ -152,4 +168,17 @@ func interrupt() chan os.Signal {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	return c
+}
+
+func interfaces() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		log.Print(err)
+		return ""
+	}
+	a := make([]string, 0, len(ifaces))
+	for _, iface := range ifaces {
+		a = append(a, iface.Name)
+	}
+	return strings.Join(a, ",")
 }

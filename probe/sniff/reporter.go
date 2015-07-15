@@ -12,11 +12,13 @@ type Reporter struct {
 	quit    chan struct{}
 }
 
-// New returns a new sniffing Reporter that samples at the given rate over the
-// default time quantum (window). For example, if sampleRate is 0.01, and
-// quantum is 5s, then the sniffer will be on and sniffing traffic for 0.01 *
-// 5s = 50ms, and then off for 5s - 50ms = 4950ms.
-func New(hostID string, factory func() source, sampleRate float64) *Reporter {
+var quantum = 5 * time.Second
+
+// NewReporter returns a new sniffing Reporter that samples at the given rate
+// over the default time quantum (window). For example, if sampleRate is 0.01,
+// and quantum is 5s, then the sniffer will be on and sniffing traffic for
+// 0.01 * 5s = 50ms, and then off for 5s - 50ms = 4950ms.
+func NewReporter(hostID string, factory SourceFactory, sampleRate float64) *Reporter {
 	r := &Reporter{
 		reports: make(chan report.Report),
 		quit:    make(chan struct{}),
@@ -25,7 +27,7 @@ func New(hostID string, factory func() source, sampleRate float64) *Reporter {
 		on  = time.Duration(sampleRate * float64(quantum))
 		off = quantum - on
 	)
-	go r.loop(hostID, factory, on, off)
+	go r.loop(newSniffer(hostID, factory, on, off))
 	return r
 }
 
@@ -39,14 +41,9 @@ func (r *Reporter) Stop() {
 	close(r.quit)
 }
 
-var quantum = 5 * time.Second
-
-func (r *Reporter) loop(hostID string, factory func() source, on, off time.Duration) {
-	var (
-		s   = newSniffer(hostID, factory, on, off)
-		rpt = report.MakeReport()
-	)
+func (r *Reporter) loop(s *sniffer) {
 	defer s.stop()
+	rpt := report.MakeReport()
 	for {
 		select {
 		case rpt0 := <-s.reports:

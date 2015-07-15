@@ -26,7 +26,7 @@ type sniffer struct {
 	quit    chan struct{}
 }
 
-func newSniffer(hostID string, factory func() source, on, off time.Duration) *sniffer {
+func newSniffer(hostID string, factory SourceFactory, on, off time.Duration) *sniffer {
 	s := &sniffer{
 		hostID:  hostID,
 		reports: make(chan report.Report),
@@ -44,33 +44,42 @@ func (s *sniffer) stop() {
 	close(s.quit)
 }
 
-func (s *sniffer) loop(factory func() source, on, off time.Duration) {
+func (s *sniffer) loop(factory SourceFactory, on, off time.Duration) {
 	for {
 		// Start a new data source, prepare a new report.
 		var (
-			source = factory()
-			rpt    = report.MakeReport()
-			done   = make(chan struct{})
+			source, err = factory()
+			rpt         = report.MakeReport()
+			done        = make(chan struct{})
 		)
+		if err != nil {
+			log.Printf("sniffer: aborting: %v", err)
+			return // give up permanently
+		}
 
 		// We need to shut it down after our interval.
 		go func() {
 			time.Sleep(on)
+			log.Print("### capture send stop")
 			source.Close()
 		}()
 
-		// Read all the packets.
+		// Read all the packets in this interval.
 		go s.read(source, rpt, done)
+		log.Println("### capture start", on.String())
 
-		// Finish, publish the report, wait for the next iteration.
+		// Finish.
 		select {
 		case <-done:
 		case <-s.quit:
 			return
 		}
+		log.Println("### capture stop", off.String())
 
+		// Publish the report.
 		s.reports <- rpt
 
+		// Wait until the next inerval.
 		select {
 		case <-time.After(off):
 		case <-s.quit:
@@ -80,6 +89,8 @@ func (s *sniffer) loop(factory func() source, on, off time.Duration) {
 }
 
 func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report, done chan struct{}) {
+	var count uint64
+	defer func() { log.Println("### capture read", count) }()
 	defer close(done)
 	for {
 		data, _, err := src.ZeroCopyReadPacketData()
@@ -91,6 +102,7 @@ func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report,
 			continue
 		}
 
+		count++
 		var (
 			srcIP, dstIP       string
 			srcPort, dstPort   string
@@ -171,9 +183,4 @@ func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report,
 			rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
 		}
 	}
-}
-
-type source interface {
-	gopacket.ZeroCopyPacketDataSource
-	Close()
 }
