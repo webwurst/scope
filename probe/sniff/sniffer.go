@@ -3,6 +3,7 @@ package sniff
 import (
 	"io"
 	"log"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -135,13 +136,13 @@ func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan packet, p
 				p.network += len(s.ip4.Payload)
 
 			case layers.LayerTypeTCP:
-				p.srcPort = s.tcp.SrcPort.String()
-				p.dstPort = s.tcp.DstPort.String()
+				p.srcPort = strconv.Itoa(int(s.tcp.SrcPort))
+				p.dstPort = strconv.Itoa(int(s.tcp.DstPort))
 				p.transport += len(s.tcp.Payload)
 
 			case layers.LayerTypeUDP:
-				p.srcPort = s.udp.SrcPort.String()
-				p.dstPort = s.udp.DstPort.String()
+				p.srcPort = strconv.Itoa(int(s.udp.SrcPort))
+				p.dstPort = strconv.Itoa(int(s.udp.DstPort))
 				p.transport += len(s.udp.Payload)
 			}
 		}
@@ -159,7 +160,6 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 			dstNodeID      = report.MakeAddressNodeID(s.hostID, p.dstIP)
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
-			dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
 		)
 		rpt.Address.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
 		rpt.Address.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
@@ -169,7 +169,7 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 		emd.BytesEgress += uint(p.network) // TODO is this right? may need to play games with LocalNetworks...
 		rpt.Address.EdgeMetadatas[edgeID] = emd
 
-		rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
+		rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstNodeID)
 	}
 
 	// With a src and dst IP and port, we can add to the endpoints.
@@ -179,7 +179,6 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 			dstNodeID      = report.MakeEndpointNodeID(s.hostID, p.dstIP, p.dstPort)
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
-			dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
 		)
 		rpt.Endpoint.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
 		rpt.Endpoint.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
@@ -189,6 +188,6 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 		emd.BytesEgress += uint(p.transport) // TODO is this right? may need to play games with LocalNetworks...
 		rpt.Endpoint.EdgeMetadatas[edgeID] = emd
 
-		rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
+		rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstNodeID)
 	}
 }
