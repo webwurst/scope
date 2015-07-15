@@ -14,6 +14,7 @@ type Topology struct {
 	Adjacency
 	EdgeMetadatas
 	NodeMetadatas
+	Capabilities
 }
 
 // Adjacency is an adjacency-list encoding of the topology. Keys are node IDs,
@@ -44,6 +45,7 @@ type EdgeMetadata struct {
 // about a given node in a given topology.
 type NodeMetadata struct {
 	Metadata
+	Capabilities IDList
 }
 
 // Metadata is shorthand for a string:string map.
@@ -52,7 +54,8 @@ type Metadata map[string]string
 // NewNodeMetadata creates a new NodeMetadata with the supplied Metadata.
 func NewNodeMetadata(m Metadata) NodeMetadata {
 	return NodeMetadata{
-		Metadata: m,
+		Metadata:     m,
+		Capabilities: MakeIDList(),
 	}
 }
 
@@ -61,6 +64,7 @@ func (nm NodeMetadata) Copy() NodeMetadata {
 	cp := NewNodeMetadata(Metadata{})
 	for k, v := range nm.Metadata {
 		cp.Metadata[k] = v
+		cp.Capabilities = MakeIDList(nm.Capabilities...)
 	}
 	return cp
 }
@@ -71,6 +75,7 @@ func NewTopology() Topology {
 		Adjacency:     map[string]IDList{},
 		EdgeMetadatas: map[string]EdgeMetadata{},
 		NodeMetadatas: map[string]NodeMetadata{},
+		Capabilities:  map[string]Capability{},
 	}
 }
 

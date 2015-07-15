@@ -75,7 +75,7 @@ func main() {
 	lifo := NewReportLIFO(c, *window)
 	defer lifo.Stop()
 
-	http.Handle("/", Router(lifo))
+	http.Handle("/", Router(lifo, c))
 	irq := interrupt()
 	go func() {
 		log.Printf("listening on %s", *listen)

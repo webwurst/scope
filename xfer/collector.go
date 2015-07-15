@@ -32,6 +32,11 @@ type Collector interface {
 	Remove(string)
 	Reports() <-chan report.Report
 	Stop()
+	CapabilityTransport
+}
+
+type CapabilityTransport interface {
+	DoBlockingCall(string, Capability) (interface{}, error)
 }
 
 // realCollector connects to probes over TCP and merges reports published by those
@@ -44,6 +49,20 @@ type realCollector struct {
 	remove chan string
 	quit   chan struct{}
 	id     string
+}
+
+type connection struct {
+	collector *realCollector
+	ip        string
+	quit      chan struct{}
+	id        string // node id of probe we're connected too.  Empty if not connected.
+}
+
+// Action is an instance of a capability (ie a call)
+type Capability struct {
+	Target string
+	ID     string
+	Args   map[string][]string
 }
 
 // NewCollector produces and returns a report collector.
@@ -65,29 +84,34 @@ func (c *realCollector) loop(batchTime time.Duration) {
 	var (
 		tick    = tick(batchTime)
 		current = report.MakeReport()
-		addrs   = map[string]chan struct{}{}
+		conns   = map[string]*connection{}
 		wg      = &sync.WaitGroup{} // per-address goroutines
 	)
 
 	add := func(ip string) {
-		if _, ok := addrs[ip]; ok {
+		if _, ok := conns[ip]; ok {
 			return
 		}
-		addrs[ip] = make(chan struct{})
-		wg.Add(1)
-		go func(quit chan struct{}) {
+		conn := &connection{
+			collector: c,
+			ip:        ip,
+			quit:      make(chan struct{}),
+		}
+		conns[ip] = conn
+		go func() {
+			wg.Add(1)
 			defer wg.Done()
-			c.reportCollector(ip, quit)
-		}(addrs[ip])
+			conn.loop()
+		}()
 	}
 
 	remove := func(ip string) {
-		q, ok := addrs[ip]
+		conn, ok := conns[ip]
 		if !ok {
 			return // hmm
 		}
-		close(q)
-		delete(addrs, ip)
+		close(conn.quit)
+		delete(conns, ip)
 	}
 
 	for {
@@ -115,13 +139,17 @@ func (c *realCollector) loop(batchTime time.Duration) {
 			remove(ip)
 
 		case <-c.quit:
-			for _, q := range addrs {
-				close(q)
+			for _, conn := range conns {
+				close(conn.quit)
 			}
 			wg.Wait()
 			return
 		}
 	}
+}
+
+func (c *realCollector) DoBlockingCall(host string, cap Capability) (interface{}, error) {
+	return nil, nil
 }
 
 // Add adds an address to be collected from.
@@ -153,7 +181,7 @@ func (c *realCollector) Stop() {
 
 // reportCollector is the loop to connect to a single Probe. It'll keep
 // running until the quit channel is closed.
-func (c *realCollector) reportCollector(ip string, quit <-chan struct{}) {
+func (c *connection) loop() {
 	backoff := initialBackoff / 2
 	for {
 		backoff *= 2
@@ -163,45 +191,52 @@ func (c *realCollector) reportCollector(ip string, quit <-chan struct{}) {
 
 		select {
 		default:
-		case <-quit:
+		case <-c.quit:
 			return
 		}
 
-		log.Printf("dialing %v (backoff %v)", ip, backoff)
+		log.Printf("dialing %v (backoff %v)", c.ip, backoff)
 
-		conn, err := net.DialTimeout("tcp", ip, connectTimeout)
+		conn, err := net.DialTimeout("tcp", c.ip, connectTimeout)
 		if err != nil {
 			log.Print(err)
 			select {
 			case <-time.After(backoff):
 				continue
-			case <-quit:
+			case <-c.quit:
 				return
 			}
 		}
 
-		log.Printf("connected to %v", ip)
+		log.Printf("connected to %v", c.ip)
 
 		go func() {
-			<-quit
-			log.Printf("closing %v collector", ip)
+			<-c.quit
+			log.Printf("closing %v collector", c.ip)
 			conn.Close()
 		}()
 
-		// Connection accepted.
-		if err := gob.NewEncoder(conn).Encode(HandshakeRequest{ID: c.id}); err != nil {
+		// Connection accepted.  Do handshake
+		if err := gob.NewEncoder(conn).Encode(HandshakeRequest{ID: c.collector.id}); err != nil {
 			log.Printf("handshake error: %v", err)
 			break
 		}
 
 		dec := gob.NewDecoder(conn)
+		var response HandshakeResponse
+		if err := dec.Decode(&response); err != nil {
+			log.Printf("handshake error: %v", err)
+			break
+		}
+		c.id = response.ID
+
 		for {
 			var report report.Report
 			err := dec.Decode(&report)
 			// Don't complain of errors when shutting down.
 			select {
 			default:
-			case <-quit:
+			case <-c.quit:
 				return
 			}
 			if err != nil {
@@ -210,8 +245,8 @@ func (c *realCollector) reportCollector(ip string, quit <-chan struct{}) {
 			}
 
 			select {
-			case c.in <- report:
-			case <-quit:
+			case c.collector.in <- report:
+			case <-c.quit:
 				return
 			}
 
@@ -226,7 +261,7 @@ func (c *realCollector) reportCollector(ip string, quit <-chan struct{}) {
 		// has a client)
 		select {
 		case <-time.After(backoff):
-		case <-quit:
+		case <-c.quit:
 			return
 		}
 	}

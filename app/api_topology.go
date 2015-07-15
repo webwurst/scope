@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/weaveworks/scope/render"
+	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/xfer"
 )
 
 const (
@@ -67,6 +69,39 @@ func handleNode(rep Reporter, t topologyView, w http.ResponseWriter, r *http.Req
 		return
 	}
 	respondWith(w, http.StatusOK, APINode{Node: render.MakeDetailedNode(rpt, node)})
+}
+
+// Capabilities
+func handleCapability(transport xfer.CapabilityTransport) func(Reporter, topologyView, http.ResponseWriter, *http.Request) {
+	return func(rep Reporter, t topologyView, w http.ResponseWriter, r *http.Request) {
+		const capabilityKey = "capability"
+		var (
+			vars           = mux.Vars(r)
+			nodeID         = vars["id"]
+			node, nodeOK   = t.renderer.Render(rep.Report())[nodeID]
+			originHost     = node.NodeMetadata.Metadata[report.HostNodeID]
+			arguments      = r.URL.Query()
+			capability, ok = arguments[capabilityKey]
+		)
+		if !nodeOK {
+			http.NotFound(w, r)
+			return
+		}
+		if !ok || len(capability) > 1 {
+			respondWith(w, http.StatusBadRequest, capability)
+			return
+		}
+		delete(arguments, capabilityKey)
+		result, err := transport.DoBlockingCall(originHost, xfer.Capability{
+			Target: nodeID,
+			ID: capability[0],
+			Args: arguments})
+		if err != nil {
+			respondWith(w, http.StatusBadRequest, err)
+			return
+		}
+		respondWith(w, http.StatusOK, result)
+	}
 }
 
 // Individual edges.

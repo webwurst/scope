@@ -19,6 +19,7 @@ func (t *Topology) Merge(other Topology) {
 	t.Adjacency.Merge(other.Adjacency)
 	t.EdgeMetadatas.Merge(other.EdgeMetadatas)
 	t.NodeMetadatas.Merge(other.NodeMetadatas)
+	t.Capabilities.Merge(other.Capabilities)
 }
 
 // Merge merges another Adjacency list into the receiver.
@@ -45,6 +46,7 @@ func (nm NodeMetadata) Merge(other NodeMetadata) NodeMetadata {
 	for k, v := range other.Metadata {
 		nm.Metadata[k] = v // other takes precedence
 	}
+	nm.Capabilities.Merge(other.Capabilities)
 	return nm
 }
 

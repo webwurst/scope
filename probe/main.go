@@ -68,12 +68,6 @@ func main() {
 		log.Printf("warning: process reporting enabled, but that requires root to find everything")
 	}
 
-	publisher, err := xfer.NewTCPPublisher(*listen)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer publisher.Close()
-
 	var (
 		hostName     = hostname()
 		hostID       = hostName // TODO: we should sanitize the hostname
@@ -81,6 +75,12 @@ func main() {
 		reporters    = []Reporter{host.NewReporter(hostID, hostName), endpoint.NewReporter(hostID, hostName, *spyProcs)}
 		processCache *process.CachingWalker
 	)
+
+	publisher, err := xfer.NewTCPPublisher(*listen, hostID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer publisher.Close()
 
 	// TODO provide an alternate implementation for Darwin.
 	if runtime.GOOS == linux {

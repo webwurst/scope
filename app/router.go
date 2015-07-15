@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/weaveworks/scope/render"
+	"github.com/weaveworks/scope/xfer"
 )
 
 // URLMatcher uses request.RequestURI (the raw, unparsed request) to attempt
@@ -43,7 +44,7 @@ func URLMatcher(pattern string) mux.MatcherFunc {
 
 // Router gives of the HTTP dispatcher. It will always use the embedded HTML
 // resources.
-func Router(c Reporter) *mux.Router {
+func Router(c Reporter, t xfer.CapabilityTransport) *mux.Router {
 	router := mux.NewRouter()
 	get := router.Methods("GET").Subrouter()
 	get.HandleFunc("/api", apiHandler)
@@ -55,6 +56,9 @@ func Router(c Reporter) *mux.Router {
 	get.MatcherFunc(URLMatcher("/api/origin/host/{id}")).HandlerFunc(makeOriginHostHandler(c))
 	get.HandleFunc("/api/report", makeRawReportHandler(c))
 	get.PathPrefix("/").Handler(http.FileServer(FS(false))) // everything else is static
+
+	post := router.Methods("POST").Subrouter()
+	post.MatcherFunc(URLMatcher("/api/topology/{topology}/{id}")).HandlerFunc(captureTopology(c, handleCapability(t)))
 	return router
 }
 

@@ -19,6 +19,7 @@ type Publisher interface {
 type TCPPublisher struct {
 	msg    chan report.Report
 	closer io.Closer
+	id     string
 }
 
 // HandshakeRequest contains the unique ID of the connecting app.
@@ -26,11 +27,16 @@ type HandshakeRequest struct {
 	ID string
 }
 
+// HandshakeResponse contains the unique ID of the connected probe.
+type HandshakeResponse struct {
+	ID string
+}
+
 // NewTCPPublisher listens for connections on listenAddress. Only one client
 // is accepted at a time; other clients are accepted, but disconnected right
 // away. Reports published via publish() will be written to the connected
 // client, if any. Gentle shutdown of the returned publisher via close().
-func NewTCPPublisher(listenAddress string) (*TCPPublisher, error) {
+func NewTCPPublisher(listenAddress string, hostID string) (*TCPPublisher, error) {
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		return nil, err
@@ -39,6 +45,7 @@ func NewTCPPublisher(listenAddress string) (*TCPPublisher, error) {
 	p := &TCPPublisher{
 		msg:    make(chan report.Report),
 		closer: listener,
+		id:     hostID,
 	}
 
 	go p.loop(fwd(listener))
@@ -85,8 +92,15 @@ func (p *TCPPublisher) loop(incoming <-chan net.Conn) {
 				continue
 			}
 
+			encoder := gob.NewEncoder(conn)
+			if err := encoder.Encode(&HandshakeResponse{ID: p.id}); err != nil {
+				log.Printf("handshake error on connection %s: %v (dropped)", conn.RemoteAddr(), err)
+				conn.Close()
+				continue
+			}
+
 			log.Printf("connection initiated: %s (%s)", conn.RemoteAddr(), listenerID)
-			activeConns[listenerID] = connEncoder{conn, gob.NewEncoder(conn)}
+			activeConns[listenerID] = connEncoder{conn, encoder}
 
 		case msg, ok := <-p.msg:
 			if !ok {
@@ -109,7 +123,6 @@ func getListenerID(c net.Conn) (string, error) {
 	if err := gob.NewDecoder(c).Decode(&req); err != nil {
 		return "", err
 	}
-
 	return req.ID, nil
 }
 
