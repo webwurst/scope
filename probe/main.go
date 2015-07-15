@@ -41,9 +41,11 @@ func main() {
 		procRoot           = flag.String("proc.root", "/proc", "location of the proc filesystem")
 		captureEnabled     = flag.Bool("capture", false, "perform sampled packet capture")
 		captureInterfaces  = flag.String("capture.interfaces", interfaces(), "packet capture on these interfaces")
-		captureRate        = flag.Float64("capture.rate", 0.01, "packet capture sample rate (0 to 1)")
+		captureRate        = flag.Float64("capture.rate", 0.01, "packet capture sample rate (0..1)")
+		captureWindow      = flag.Duration("capture.window", 5*time.Second, "packet capture sample rate calculation window")
 	)
 	flag.Parse()
+	log.SetFlags(log.Lmicroseconds)
 
 	if len(flag.Args()) != 0 {
 		flag.Usage()
@@ -114,11 +116,20 @@ func main() {
 
 	if *captureEnabled {
 		if *captureRate <= 0.0 || *captureRate > 1.0 {
-			log.Fatalf("capture enabled, but invalid capture rate %.2f", *captureRate)
+			log.Fatalf("invalid capture rate %.2f", *captureRate)
 		}
+		var (
+			on  = time.Duration(float64(*captureWindow) * (*captureRate))
+			off = (*captureWindow) - on
+		)
 		for _, iface := range strings.Split(*captureInterfaces, ",") {
-			log.Printf("packet capture on %s", iface)
-			reporters = append(reporters, sniff.NewReporter(hostID, sniff.NewSourceFactory(iface), *captureRate))
+			source, err := sniff.NewSource(iface)
+			if err != nil {
+				log.Printf("warning: %v", err)
+				continue
+			}
+			log.Printf("capturing packets on %s", iface)
+			reporters = append(reporters, sniff.New(hostID, source, on, off))
 		}
 	}
 

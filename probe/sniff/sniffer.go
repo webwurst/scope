@@ -3,6 +3,7 @@ package sniff
 import (
 	"io"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/weaveworks/scope/report"
@@ -11,7 +12,8 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-type sniffer struct {
+// Sniffer is a packet-sniffing reporter.
+type Sniffer struct {
 	hostID  string
 	reports chan report.Report
 	parser  *gopacket.DecodingLayerParser
@@ -23,77 +25,81 @@ type sniffer struct {
 	udp     layers.UDP
 	icmp4   layers.ICMPv4
 	icmp6   layers.ICMPv6
-	quit    chan struct{}
 }
 
-func newSniffer(hostID string, factory SourceFactory, on, off time.Duration) *sniffer {
-	s := &sniffer{
+// New returns a new sniffing reporter that samples traffic by turning its
+// packet capture facilities on and off.
+func New(hostID string, src gopacket.ZeroCopyPacketDataSource, on, off time.Duration) *Sniffer {
+	s := &Sniffer{
 		hostID:  hostID,
 		reports: make(chan report.Report),
-		quit:    make(chan struct{}),
 	}
 	s.parser = gopacket.NewDecodingLayerParser(
 		layers.LayerTypeEthernet,
 		&s.eth, &s.ip4, &s.ip6, &s.tcp, &s.udp, &s.icmp4, &s.icmp6,
 	)
-	go s.loop(factory, on, off)
+	go s.loop(src, on, off)
 	return s
 }
 
-func (s *sniffer) stop() {
-	close(s.quit)
+// Report implements the Reporter interface.
+func (s *Sniffer) Report() (report.Report, error) {
+	return <-s.reports, nil
 }
 
-func (s *sniffer) loop(factory SourceFactory, on, off time.Duration) {
+func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Duration) {
+	var (
+		process = uint64(1)               // initially enabled
+		total   = uint64(0)               // total packets seen
+		count   = uint64(0)               // count of packets captured
+		packets = make(chan packet)       // decoded packets
+		rpt     = report.MakeReport()     // the report we build
+		turnOn  = (<-chan time.Time)(nil) // signal to start capture (initially enabled)
+		turnOff = time.After(on)          // signal to stop capture
+	)
+
+	go s.read(src, packets, &process, &total, &count)
+
 	for {
-		// Start a new data source, prepare a new report.
-		var (
-			source, err = factory()
-			rpt         = report.MakeReport()
-			done        = make(chan struct{})
-		)
-		if err != nil {
-			log.Printf("sniffer: aborting: %v", err)
-			return // give up permanently
-		}
-
-		// We need to shut it down after our interval.
-		go func() {
-			time.Sleep(on)
-			log.Print("### capture send stop")
-			source.Close()
-		}()
-
-		// Read all the packets in this interval.
-		go s.read(source, rpt, done)
-		log.Println("### capture start", on.String())
-
-		// Finish.
 		select {
-		case <-done:
-		case <-s.quit:
-			return
-		}
-		log.Println("### capture stop", off.String())
+		case p := <-packets:
+			s.merge(p, rpt)
 
-		// Publish the report.
-		s.reports <- rpt
+		case <-turnOn:
+			atomic.StoreUint64(&process, 1) // enable packet capture
+			turnOn = nil                    // disable the on switch
+			turnOff = time.After(on)        // enable the off switch
 
-		// Wait until the next inerval.
-		select {
-		case <-time.After(off):
-		case <-s.quit:
-			return
+		case <-turnOff:
+			atomic.StoreUint64(&process, 0) // disable packet capture
+			turnOn = time.After(off)        // enable the on switch
+			turnOff = nil                   // disable the off switch
+
+		case s.reports <- rpt:
+			rpt = report.MakeReport()
 		}
 	}
 }
 
-func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report, done chan struct{}) {
-	var count uint64
-	defer func() { log.Println("### capture read", count) }()
-	defer close(done)
+// An intermediate, decoded form of a packet, containing the information that
+// the Scope data model cares about. Designed to decouple the packet data
+// source loop, which should be as fast as possible, and the process of
+// merging the packet information to a report, which may take some time and
+// allocations.
+type packet struct {
+	srcIP, dstIP       string
+	srcPort, dstPort   string
+	network, transport int // byte counts
+}
+
+func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan packet, process, total, count *uint64) {
+	var (
+		p    packet
+		data []byte
+		err  error
+	)
 	for {
-		data, _, err := src.ZeroCopyReadPacketData()
+		data, _, err = src.ZeroCopyReadPacketData()
 		if err == io.EOF {
 			return // done
 		}
@@ -101,13 +107,10 @@ func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report,
 			log.Printf("sniffer: read: %v", err)
 			continue
 		}
-
-		count++
-		var (
-			srcIP, dstIP       string
-			srcPort, dstPort   string
-			network, transport int
-		)
+		atomic.AddUint64(total, 1)
+		if atomic.LoadUint64(process) == 0 {
+			continue
+		}
 
 		s.parser.DecodeLayers(data, &s.decoded)
 		for _, t := range s.decoded {
@@ -116,71 +119,76 @@ func (s *sniffer) read(src gopacket.ZeroCopyPacketDataSource, rpt report.Report,
 				//
 
 			case layers.LayerTypeICMPv4:
-				network += len(s.icmp4.Payload)
+				p.network += len(s.icmp4.Payload)
 
 			case layers.LayerTypeICMPv6:
-				network += len(s.icmp6.Payload)
+				p.network += len(s.icmp6.Payload)
 
 			case layers.LayerTypeIPv6:
-				srcIP = s.ip6.SrcIP.String()
-				dstIP = s.ip6.DstIP.String()
-				network += len(s.ip6.Payload)
+				p.srcIP = s.ip6.SrcIP.String()
+				p.dstIP = s.ip6.DstIP.String()
+				p.network += len(s.ip6.Payload)
 
 			case layers.LayerTypeIPv4:
-				srcIP = s.ip4.SrcIP.String()
-				dstIP = s.ip4.DstIP.String()
-				network += len(s.ip4.Payload)
+				p.srcIP = s.ip4.SrcIP.String()
+				p.dstIP = s.ip4.DstIP.String()
+				p.network += len(s.ip4.Payload)
 
 			case layers.LayerTypeTCP:
-				srcPort = s.tcp.SrcPort.String()
-				dstPort = s.tcp.DstPort.String()
-				transport += len(s.tcp.Payload)
+				p.srcPort = s.tcp.SrcPort.String()
+				p.dstPort = s.tcp.DstPort.String()
+				p.transport += len(s.tcp.Payload)
 
 			case layers.LayerTypeUDP:
-				srcPort = s.udp.SrcPort.String()
-				dstPort = s.udp.DstPort.String()
-				transport += len(s.udp.Payload)
+				p.srcPort = s.udp.SrcPort.String()
+				p.dstPort = s.udp.DstPort.String()
+				p.transport += len(s.udp.Payload)
 			}
 		}
 
-		// With a src and dst IP, we can add to the address topology.
-		if srcIP != "" && dstIP != "" {
-			var (
-				srcNodeID      = report.MakeAddressNodeID(s.hostID, srcIP)
-				dstNodeID      = report.MakeAddressNodeID(s.hostID, dstIP)
-				edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
-				srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
-				dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
-			)
-			rpt.Address.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
-			rpt.Address.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		atomic.AddUint64(count, 1)
+		dst <- p
+	}
+}
 
-			emd := rpt.Address.EdgeMetadatas[edgeID]
-			emd.WithBytes = true
-			emd.BytesEgress += uint(network) // TODO is this right? may need to play games with LocalNetworks...
-			rpt.Address.EdgeMetadatas[edgeID] = emd
+func (s *Sniffer) merge(p packet, rpt report.Report) {
+	// With a src and dst IP, we can add to the address topology.
+	if p.srcIP != "" && p.dstIP != "" {
+		var (
+			srcNodeID      = report.MakeAddressNodeID(s.hostID, p.srcIP)
+			dstNodeID      = report.MakeAddressNodeID(s.hostID, p.dstIP)
+			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
+			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
+			dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
+		)
+		rpt.Address.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		rpt.Address.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
 
-			rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
-		}
+		emd := rpt.Address.EdgeMetadatas[edgeID]
+		emd.WithBytes = true
+		emd.BytesEgress += uint(p.network) // TODO is this right? may need to play games with LocalNetworks...
+		rpt.Address.EdgeMetadatas[edgeID] = emd
 
-		// With a src and dst IP and port, we can add to the endpoints.
-		if srcIP != "" && dstIP != "" && srcPort != "" && dstPort != "" {
-			var (
-				srcNodeID      = report.MakeEndpointNodeID(s.hostID, srcIP, srcPort)
-				dstNodeID      = report.MakeEndpointNodeID(s.hostID, dstIP, dstPort)
-				edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
-				srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
-				dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
-			)
-			rpt.Endpoint.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
-			rpt.Endpoint.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
+	}
 
-			emd := rpt.Endpoint.EdgeMetadatas[edgeID]
-			emd.WithBytes = true
-			emd.BytesEgress += uint(transport) // TODO is this right? may need to play games with LocalNetworks...
-			rpt.Endpoint.EdgeMetadatas[edgeID] = emd
+	// With a src and dst IP and port, we can add to the endpoints.
+	if p.srcIP != "" && p.dstIP != "" && p.srcPort != "" && p.dstPort != "" {
+		var (
+			srcNodeID      = report.MakeEndpointNodeID(s.hostID, p.srcIP, p.srcPort)
+			dstNodeID      = report.MakeEndpointNodeID(s.hostID, p.dstIP, p.dstPort)
+			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
+			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
+			dstAdjacencyID = report.MakeAdjacencyID(dstNodeID)
+		)
+		rpt.Endpoint.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		rpt.Endpoint.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
 
-			rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
-		}
+		emd := rpt.Endpoint.EdgeMetadatas[edgeID]
+		emd.WithBytes = true
+		emd.BytesEgress += uint(p.transport) // TODO is this right? may need to play games with LocalNetworks...
+		rpt.Endpoint.EdgeMetadatas[edgeID] = emd
+
+		rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstAdjacencyID)
 	}
 }
