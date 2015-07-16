@@ -53,18 +53,22 @@ func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Durat
 		process = uint64(1)               // initially enabled
 		total   = uint64(0)               // total packets seen
 		count   = uint64(0)               // count of packets captured
-		packets = make(chan packet)       // decoded packets
+		packets = make(chan Packet)       // decoded packets
 		rpt     = report.MakeReport()     // the report we build
 		turnOn  = (<-chan time.Time)(nil) // signal to start capture (initially enabled)
 		turnOff = time.After(on)          // signal to stop capture
+		done    = make(chan struct{})     // when src is finished, we're done too
 	)
 
-	go s.read(src, packets, &process, &total, &count)
+	go func() {
+		s.read(src, packets, &process, &total, &count)
+		close(done)
+	}()
 
 	for {
 		select {
 		case p := <-packets:
-			s.merge(p, rpt)
+			s.Merge(p, rpt)
 
 		case <-turnOn:
 			atomic.StoreUint64(&process, 1) // enable packet capture
@@ -78,24 +82,27 @@ func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Durat
 
 		case s.reports <- rpt:
 			rpt = report.MakeReport()
+
+		case <-done:
+			return
 		}
 	}
 }
 
-// An intermediate, decoded form of a packet, containing the information that
-// the Scope data model cares about. Designed to decouple the packet data
+// Packet is an intermediate, decoded form of a packet, with the information
+// that the Scope data model cares about. Designed to decouple the packet data
 // source loop, which should be as fast as possible, and the process of
 // merging the packet information to a report, which may take some time and
 // allocations.
-type packet struct {
-	srcIP, dstIP       string
-	srcPort, dstPort   string
-	network, transport int // byte counts
+type Packet struct {
+	SrcIP, DstIP       string
+	SrcPort, DstPort   string
+	Network, Transport int // byte counts
 }
 
-func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan packet, process, total, count *uint64) {
+func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan Packet, process, total, count *uint64) {
 	var (
-		p    packet
+		p    Packet
 		data []byte
 		err  error
 	)
@@ -120,30 +127,30 @@ func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan packet, p
 				//
 
 			case layers.LayerTypeICMPv4:
-				p.network += len(s.icmp4.Payload)
+				p.Network += len(s.icmp4.Payload)
 
 			case layers.LayerTypeICMPv6:
-				p.network += len(s.icmp6.Payload)
+				p.Network += len(s.icmp6.Payload)
 
 			case layers.LayerTypeIPv6:
-				p.srcIP = s.ip6.SrcIP.String()
-				p.dstIP = s.ip6.DstIP.String()
-				p.network += len(s.ip6.Payload)
+				p.SrcIP = s.ip6.SrcIP.String()
+				p.DstIP = s.ip6.DstIP.String()
+				p.Network += len(s.ip6.Payload)
 
 			case layers.LayerTypeIPv4:
-				p.srcIP = s.ip4.SrcIP.String()
-				p.dstIP = s.ip4.DstIP.String()
-				p.network += len(s.ip4.Payload)
+				p.SrcIP = s.ip4.SrcIP.String()
+				p.DstIP = s.ip4.DstIP.String()
+				p.Network += len(s.ip4.Payload)
 
 			case layers.LayerTypeTCP:
-				p.srcPort = strconv.Itoa(int(s.tcp.SrcPort))
-				p.dstPort = strconv.Itoa(int(s.tcp.DstPort))
-				p.transport += len(s.tcp.Payload)
+				p.SrcPort = strconv.Itoa(int(s.tcp.SrcPort))
+				p.DstPort = strconv.Itoa(int(s.tcp.DstPort))
+				p.Transport += len(s.tcp.Payload)
 
 			case layers.LayerTypeUDP:
-				p.srcPort = strconv.Itoa(int(s.udp.SrcPort))
-				p.dstPort = strconv.Itoa(int(s.udp.DstPort))
-				p.transport += len(s.udp.Payload)
+				p.SrcPort = strconv.Itoa(int(s.udp.SrcPort))
+				p.DstPort = strconv.Itoa(int(s.udp.DstPort))
+				p.Transport += len(s.udp.Payload)
 			}
 		}
 
@@ -152,12 +159,13 @@ func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan packet, p
 	}
 }
 
-func (s *Sniffer) merge(p packet, rpt report.Report) {
+// Merge puts the packet into the report.
+func (s *Sniffer) Merge(p Packet, rpt report.Report) {
 	// With a src and dst IP, we can add to the address topology.
-	if p.srcIP != "" && p.dstIP != "" {
+	if p.SrcIP != "" && p.DstIP != "" {
 		var (
-			srcNodeID      = report.MakeAddressNodeID(s.hostID, p.srcIP)
-			dstNodeID      = report.MakeAddressNodeID(s.hostID, p.dstIP)
+			srcNodeID      = report.MakeAddressNodeID(s.hostID, p.SrcIP)
+			dstNodeID      = report.MakeAddressNodeID(s.hostID, p.DstIP)
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
 		)
@@ -166,17 +174,17 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 
 		emd := rpt.Address.EdgeMetadatas[edgeID]
 		emd.WithBytes = true
-		emd.BytesEgress += uint(p.network) // TODO is this right? may need to play games with LocalNetworks...
+		emd.BytesEgress += uint(p.Network) // TODO is this right? may need to play games with LocalNetworks...
 		rpt.Address.EdgeMetadatas[edgeID] = emd
 
 		rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstNodeID)
 	}
 
 	// With a src and dst IP and port, we can add to the endpoints.
-	if p.srcIP != "" && p.dstIP != "" && p.srcPort != "" && p.dstPort != "" {
+	if p.SrcIP != "" && p.DstIP != "" && p.SrcPort != "" && p.DstPort != "" {
 		var (
-			srcNodeID      = report.MakeEndpointNodeID(s.hostID, p.srcIP, p.srcPort)
-			dstNodeID      = report.MakeEndpointNodeID(s.hostID, p.dstIP, p.dstPort)
+			srcNodeID      = report.MakeEndpointNodeID(s.hostID, p.SrcIP, p.SrcPort)
+			dstNodeID      = report.MakeEndpointNodeID(s.hostID, p.DstIP, p.DstPort)
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
 		)
@@ -185,7 +193,7 @@ func (s *Sniffer) merge(p packet, rpt report.Report) {
 
 		emd := rpt.Endpoint.EdgeMetadatas[edgeID]
 		emd.WithBytes = true
-		emd.BytesEgress += uint(p.transport) // TODO is this right? may need to play games with LocalNetworks...
+		emd.BytesEgress += uint(p.Transport) // TODO is this right? may need to play games with LocalNetworks...
 		rpt.Endpoint.EdgeMetadatas[edgeID] = emd
 
 		rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstNodeID)
