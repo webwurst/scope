@@ -8,6 +8,16 @@ import (
 	"github.com/weaveworks/scope/test"
 )
 
+func TestBasicWalk(t *testing.T) {
+	var (
+		procRoot = "/proc"
+		procFunc = func(process.Process) {}
+	)
+	if err := process.NewWalker(procRoot).Walk(procFunc); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCache(t *testing.T) {
 	processes := []process.Process{
 		{PID: 1, PPID: 0, Comm: "init"},
