@@ -120,7 +120,9 @@ func (s *Sniffer) read(src gopacket.ZeroCopyPacketDataSource, dst chan Packet, p
 			continue
 		}
 
-		s.parser.DecodeLayers(data, &s.decoded)
+		if err := s.parser.DecodeLayers(data, &s.decoded); err != nil {
+			log.Printf("sniffer read: %v", err)
+		}
 		for _, t := range s.decoded {
 			switch t {
 			case layers.LayerTypeEthernet:

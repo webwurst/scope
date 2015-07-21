@@ -30,7 +30,7 @@ func TestSnifferShutdown(t *testing.T) {
 	// Try to get a report from the sniffer. It should block forever, as the
 	// loop goroutine should have exited.
 	report := make(chan struct{})
-	go func() { s.Report(); close(report) }()
+	go func() { _, _ = s.Report(); close(report) }()
 	select {
 	case <-time.After(time.Millisecond):
 	case <-report:
