@@ -68,8 +68,8 @@ func TestMerge(t *testing.T) {
 		},
 		EdgeMetadatas: report.EdgeMetadatas{
 			report.MakeEdgeID(srcEndpointNodeID, dstEndpointNodeID): report.EdgeMetadata{
-				WithBytes:   true,
-				BytesEgress: 256,
+				PacketCount: newu64(1),
+				ByteCount:   newu64(256),
 			},
 		},
 		NodeMetadatas: report.NodeMetadatas{
@@ -92,8 +92,8 @@ func TestMerge(t *testing.T) {
 		},
 		EdgeMetadatas: report.EdgeMetadatas{
 			report.MakeEdgeID(srcAddressNodeID, dstAddressNodeID): report.EdgeMetadata{
-				WithBytes:   true,
-				BytesEgress: 512,
+				PacketCount: newu64(1),
+				ByteCount:   newu64(512),
 			},
 		},
 		NodeMetadatas: report.NodeMetadatas{
@@ -133,3 +133,5 @@ func (s *mockSource) Close() {
 	defer s.mtx.Unlock()
 	s.err = io.EOF
 }
+
+func newu64(value uint64) *uint64 { return &value }

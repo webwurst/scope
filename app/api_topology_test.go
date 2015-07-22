@@ -12,6 +12,7 @@ import (
 
 	"github.com/weaveworks/scope/render"
 	"github.com/weaveworks/scope/render/expected"
+	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/test"
 )
 
@@ -63,7 +64,7 @@ func TestAPITopologyApplications(t *testing.T) {
 
 		want := render.OnlyConnected(expected.RenderedProcesses)
 		if !reflect.DeepEqual(want, topo.Nodes) {
-			t.Error("\n" + test.Diff(want, topo.Nodes))
+			t.Error(test.Diff(want, topo.Nodes))
 		}
 	}
 	{
@@ -84,12 +85,13 @@ func TestAPITopologyApplications(t *testing.T) {
 		if err := json.Unmarshal(body, &edge); err != nil {
 			t.Fatalf("JSON parse error: %s", err)
 		}
-		want := render.AggregateMetadata{
-			"egress_bytes":  10,
-			"ingress_bytes": 100,
+		want := report.EdgeMetadata{
+			PacketCount: newu64(100),
+			ByteCount:   newu64(10),
 		}
-		if !reflect.DeepEqual(want, edge.Metadata) {
-			t.Error("\n" + test.Diff(want, edge.Metadata))
+		have := edge.Metadata.EdgeMetadata
+		if !reflect.DeepEqual(want, have) {
+			t.Error(test.Diff(want, have))
 		}
 	}
 }
@@ -105,8 +107,8 @@ func TestAPITopologyHosts(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !reflect.DeepEqual(expected.RenderedHosts, topo.Nodes) {
-			t.Error("\n" + test.Diff(expected.RenderedHosts, topo.Nodes))
+		if want, have := expected.RenderedHosts, topo.Nodes; !reflect.DeepEqual(want, have) {
+			t.Error(test.Diff(want, have))
 		}
 	}
 	{
@@ -127,11 +129,12 @@ func TestAPITopologyHosts(t *testing.T) {
 		if err := json.Unmarshal(body, &edge); err != nil {
 			t.Fatalf("JSON parse error: %s", err)
 		}
-		want := render.AggregateMetadata{
-			"max_conn_count_tcp": 3,
+		want := report.EdgeMetadata{
+			MaxConnCountTCP: newu64(3),
 		}
-		if !reflect.DeepEqual(want, edge.Metadata) {
-			t.Errorf("Edge metadata error. Want %v, have %v", want, edge)
+		have := edge.Metadata.EdgeMetadata
+		if !reflect.DeepEqual(want, have) {
+			t.Error(test.Diff(want, have))
 		}
 	}
 }
@@ -169,3 +172,5 @@ func TestAPITopologyWebsocket(t *testing.T) {
 	equals(t, 0, len(d.Update))
 	equals(t, 0, len(d.Remove))
 }
+
+func newu64(value uint64) *uint64 { return &value }

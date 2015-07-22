@@ -14,22 +14,22 @@ var (
 	unknownPseudoNode1ID = render.MakePseudoNodeID("10.10.10.10", test.ServerIP, "80")
 	unknownPseudoNode2ID = render.MakePseudoNodeID("10.10.10.11", test.ServerIP, "80")
 	unknownPseudoNode1   = render.RenderableNode{
-		ID:                unknownPseudoNode1ID,
-		LabelMajor:        "10.10.10.10",
-		Pseudo:            true,
-		AggregateMetadata: render.AggregateMetadata{},
+		ID:           unknownPseudoNode1ID,
+		LabelMajor:   "10.10.10.10",
+		Pseudo:       true,
+		EdgeMetadata: report.EdgeMetadata{},
 	}
 	unknownPseudoNode2 = render.RenderableNode{
-		ID:                unknownPseudoNode2ID,
-		LabelMajor:        "10.10.10.11",
-		Pseudo:            true,
-		AggregateMetadata: render.AggregateMetadata{},
+		ID:           unknownPseudoNode2ID,
+		LabelMajor:   "10.10.10.11",
+		Pseudo:       true,
+		EdgeMetadata: report.EdgeMetadata{},
 	}
 	theInternetNode = render.RenderableNode{
-		ID:                render.TheInternetID,
-		LabelMajor:        render.TheInternetMajor,
-		Pseudo:            true,
-		AggregateMetadata: render.AggregateMetadata{},
+		ID:           render.TheInternetID,
+		LabelMajor:   render.TheInternetMajor,
+		Pseudo:       true,
+		EdgeMetadata: report.EdgeMetadata{},
 	}
 
 	ClientProcess1ID      = render.MakeProcessID(test.ClientHostID, test.Client1PID)
@@ -50,9 +50,9 @@ var (
 				test.ClientProcess1NodeID,
 				test.ClientHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 100,
-				render.KeyBytesEgress:  10,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(100),
+				ByteCount:   newu64(10),
 			},
 		},
 		ClientProcess2ID: {
@@ -67,9 +67,9 @@ var (
 				test.ClientProcess2NodeID,
 				test.ClientHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 200,
-				render.KeyBytesEgress:  20,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(200),
+				ByteCount:   newu64(20),
 			},
 		},
 		ServerProcessID: {
@@ -90,9 +90,9 @@ var (
 				test.ServerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 150,
-				render.KeyBytesEgress:  1500,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(150),
+				ByteCount:   newu64(1500),
 			},
 		},
 		nonContainerProcessID: {
@@ -106,7 +106,7 @@ var (
 				test.NonContainerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{},
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		unknownPseudoNode1ID: unknownPseudoNode1,
 		unknownPseudoNode2ID: unknownPseudoNode2,
@@ -128,9 +128,9 @@ var (
 				test.ClientProcess2NodeID,
 				test.ClientHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 300,
-				render.KeyBytesEgress:  30,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(300),
+				ByteCount:   newu64(30),
 			},
 		},
 		"apache": {
@@ -150,9 +150,9 @@ var (
 				test.ServerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 150,
-				render.KeyBytesEgress:  1500,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(150),
+				ByteCount:   newu64(1500),
 			},
 		},
 		"bash": {
@@ -165,7 +165,7 @@ var (
 				test.NonContainerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{},
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		unknownPseudoNode1ID: unknownPseudoNode1,
 		unknownPseudoNode2ID: unknownPseudoNode2,
@@ -188,9 +188,9 @@ var (
 				test.ClientProcess2NodeID,
 				test.ClientHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 300,
-				render.KeyBytesEgress:  30,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(300),
+				ByteCount:   newu64(30),
 			},
 		},
 		test.ServerContainerID: {
@@ -206,9 +206,9 @@ var (
 				test.ServerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 150,
-				render.KeyBytesEgress:  1500,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(150),
+				ByteCount:   newu64(1500),
 			},
 		},
 		uncontainedServerID: {
@@ -221,7 +221,7 @@ var (
 				test.NonContainerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{},
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		render.TheInternetID: theInternetNode,
 	}
@@ -243,9 +243,9 @@ var (
 				test.ClientProcess2NodeID,
 				test.ClientHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 300,
-				render.KeyBytesEgress:  30,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(300),
+				ByteCount:   newu64(30),
 			},
 		},
 		test.ServerContainerImageName: {
@@ -261,9 +261,9 @@ var (
 				test.Server80NodeID,
 				test.ServerProcessNodeID,
 				test.ServerHostNodeID),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyBytesIngress: 150,
-				render.KeyBytesEgress:  1500,
+			EdgeMetadata: report.EdgeMetadata{
+				PacketCount: newu64(150),
+				ByteCount:   newu64(1500),
 			},
 		},
 		uncontainedServerID: {
@@ -276,7 +276,7 @@ var (
 				test.NonContainerProcessNodeID,
 				test.ServerHostNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{},
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		render.TheInternetID: theInternetNode,
 	}
@@ -298,8 +298,8 @@ var (
 				test.ServerHostNodeID,
 				test.ServerAddressNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyMaxConnCountTCP: 3,
+			EdgeMetadata: report.EdgeMetadata{
+				MaxConnCountTCP: newu64(3),
 			},
 		},
 		ClientHostRenderedID: {
@@ -313,22 +313,24 @@ var (
 				test.ClientHostNodeID,
 				test.ClientAddressNodeID,
 			),
-			AggregateMetadata: render.AggregateMetadata{
-				render.KeyMaxConnCountTCP: 3,
+			EdgeMetadata: report.EdgeMetadata{
+				MaxConnCountTCP: newu64(3),
 			},
 		},
 		pseudoHostID1: {
-			ID:                pseudoHostID1,
-			LabelMajor:        "10.10.10.10",
-			Pseudo:            true,
-			AggregateMetadata: render.AggregateMetadata{},
+			ID:           pseudoHostID1,
+			LabelMajor:   "10.10.10.10",
+			Pseudo:       true,
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		pseudoHostID2: {
-			ID:                pseudoHostID2,
-			LabelMajor:        "10.10.10.11",
-			Pseudo:            true,
-			AggregateMetadata: render.AggregateMetadata{},
+			ID:           pseudoHostID2,
+			LabelMajor:   "10.10.10.11",
+			Pseudo:       true,
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		render.TheInternetID: theInternetNode,
 	}
 )
+
+func newu64(value uint64) *uint64 { return &value }

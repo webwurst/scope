@@ -36,11 +36,11 @@ func TestReduceRender(t *testing.T) {
 
 func TestReduceEdge(t *testing.T) {
 	renderer := render.Reduce([]render.Renderer{
-		mockRenderer{aggregateMetadata: render.AggregateMetadata{"foo": 1}},
-		mockRenderer{aggregateMetadata: render.AggregateMetadata{"bar": 2}},
+		mockRenderer{aggregateMetadata: render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(1)}}},
+		mockRenderer{aggregateMetadata: render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(2)}}},
 	})
 
-	want := render.AggregateMetadata{"foo": 1, "bar": 2}
+	want := render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(3)}}
 	have := renderer.AggregateMetadata(report.MakeReport(), "", "")
 
 	if !reflect.DeepEqual(want, have) {
@@ -118,8 +118,8 @@ func TestMapEdge(t *testing.T) {
 				">bar": report.MakeIDList("foo"),
 			},
 			EdgeMetadatas: report.EdgeMetadatas{
-				"foo|bar": report.EdgeMetadata{WithBytes: true, BytesIngress: 1, BytesEgress: 2},
-				"bar|foo": report.EdgeMetadata{WithBytes: true, BytesIngress: 3, BytesEgress: 4},
+				"foo|bar": report.EdgeMetadata{PacketCount: newu64(1), ByteCount: newu64(2)},
+				"bar|foo": report.EdgeMetadata{PacketCount: newu64(3), ByteCount: newu64(4)},
 			},
 		}
 	}
@@ -139,10 +139,10 @@ func TestMapEdge(t *testing.T) {
 		},
 	}
 
-	want := render.AggregateMetadata{
-		render.KeyBytesIngress: 1,
-		render.KeyBytesEgress:  2,
-	}
+	want := render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{
+		PacketCount: newu64(1),
+		ByteCount:   newu64(2),
+	}}
 	have := mapper.AggregateMetadata(report.MakeReport(), "_foo", "_bar")
 	if !reflect.DeepEqual(want, have) {
 		t.Errorf("want %+v, have %+v", want, have)
@@ -166,3 +166,5 @@ func TestFilterRender(t *testing.T) {
 		t.Errorf("want %+v, have %+v", want, have)
 	}
 }
+
+func newu64(value uint64) *uint64 { return &value }

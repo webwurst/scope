@@ -205,7 +205,7 @@ func (m LeafMap) Render(rpt report.Report) RenderableNodes {
 			srcRenderableNode.Origins = srcRenderableNode.Origins.Add(srcNodeID)
 			edgeID := report.MakeEdgeID(srcNodeID, dstNodeID)
 			if md, ok := t.EdgeMetadatas[edgeID]; ok {
-				srcRenderableNode.AggregateMetadata.Merge(AggregateMetadataOf(md))
+				srcRenderableNode.EdgeMetadata.Merge(md)
 			}
 		}
 
@@ -240,7 +240,7 @@ func (m LeafMap) AggregateMetadata(rpt report.Report, srcRenderableID, dstRender
 			metadata.Flatten(edgeMeta)
 		}
 	}
-	return AggregateMetadataOf(metadata)
+	return AggregateMetadata{metadata}
 }
 
 // Render produces a set of RenderableNodes given a Report

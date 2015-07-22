@@ -29,7 +29,9 @@ type Sniffer struct {
 }
 
 // New returns a new sniffing reporter that samples traffic by turning its
-// packet capture facilities on and off.
+// packet capture facilities on and off. Note that the on and off durations
+// represent a way to bound CPU burn. Effective sample rate needs to be
+// calculated as (packets decoded / packets observed).
 func New(hostID string, src gopacket.ZeroCopyPacketDataSource, on, off time.Duration) *Sniffer {
 	s := &Sniffer{
 		hostID:  hostID,
@@ -171,12 +173,18 @@ func (s *Sniffer) Merge(p Packet, rpt report.Report) {
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
 		)
-		rpt.Address.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
-		rpt.Address.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		rpt.Address.NodeMetadatas[srcNodeID] = report.NodeMetadata{}
+		rpt.Address.NodeMetadatas[dstNodeID] = report.NodeMetadata{}
 
 		emd := rpt.Address.EdgeMetadatas[edgeID]
-		emd.WithBytes = true
-		emd.BytesEgress += uint(p.Network) // TODO is this right? may need to play games with LocalNetworks...
+		if emd.PacketCount == nil {
+			emd.PacketCount = new(uint64)
+		}
+		*emd.PacketCount++
+		if emd.ByteCount == nil {
+			emd.ByteCount = new(uint64)
+		}
+		*emd.ByteCount += uint64(p.Network)
 		rpt.Address.EdgeMetadatas[edgeID] = emd
 
 		rpt.Address.Adjacency[srcAdjacencyID] = rpt.Address.Adjacency[srcAdjacencyID].Add(dstNodeID)
@@ -190,12 +198,18 @@ func (s *Sniffer) Merge(p Packet, rpt report.Report) {
 			edgeID         = report.MakeEdgeID(srcNodeID, dstNodeID)
 			srcAdjacencyID = report.MakeAdjacencyID(srcNodeID)
 		)
-		rpt.Endpoint.NodeMetadatas[srcNodeID] = report.NodeMetadata{} // TODO can we add something here?
-		rpt.Endpoint.NodeMetadatas[dstNodeID] = report.NodeMetadata{} // TODO can we add something here?
+		rpt.Endpoint.NodeMetadatas[srcNodeID] = report.NodeMetadata{}
+		rpt.Endpoint.NodeMetadatas[dstNodeID] = report.NodeMetadata{}
 
 		emd := rpt.Endpoint.EdgeMetadatas[edgeID]
-		emd.WithBytes = true
-		emd.BytesEgress += uint(p.Transport) // TODO is this right? may need to play games with LocalNetworks...
+		if emd.PacketCount == nil {
+			emd.PacketCount = new(uint64)
+		}
+		*emd.PacketCount++
+		if emd.ByteCount == nil {
+			emd.ByteCount = new(uint64)
+		}
+		*emd.ByteCount += uint64(p.Transport)
 		rpt.Endpoint.EdgeMetadatas[edgeID] = emd
 
 		rpt.Endpoint.Adjacency[srcAdjacencyID] = rpt.Endpoint.Adjacency[srcAdjacencyID].Add(dstNodeID)
