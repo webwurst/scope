@@ -85,12 +85,10 @@ func TestAPITopologyApplications(t *testing.T) {
 		if err := json.Unmarshal(body, &edge); err != nil {
 			t.Fatalf("JSON parse error: %s", err)
 		}
-		want := report.EdgeMetadata{
+		if want, have := (report.EdgeMetadata{
 			PacketCount: newu64(100),
 			ByteCount:   newu64(10),
-		}
-		have := edge.Metadata.EdgeMetadata
-		if !reflect.DeepEqual(want, have) {
+		}), edge.Metadata; !reflect.DeepEqual(want, have) {
 			t.Error(test.Diff(want, have))
 		}
 	}
@@ -129,11 +127,9 @@ func TestAPITopologyHosts(t *testing.T) {
 		if err := json.Unmarshal(body, &edge); err != nil {
 			t.Fatalf("JSON parse error: %s", err)
 		}
-		want := report.EdgeMetadata{
+		if want, have := (report.EdgeMetadata{
 			MaxConnCountTCP: newu64(3),
-		}
-		have := edge.Metadata.EdgeMetadata
-		if !reflect.DeepEqual(want, have) {
+		}), edge.Metadata; !reflect.DeepEqual(want, have) {
 			t.Error(test.Diff(want, have))
 		}
 	}

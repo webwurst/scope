@@ -10,14 +10,14 @@ import (
 
 type mockRenderer struct {
 	render.RenderableNodes
-	aggregateMetadata render.AggregateMetadata
+	edgeMetadata report.EdgeMetadata
 }
 
 func (m mockRenderer) Render(rpt report.Report) render.RenderableNodes {
 	return m.RenderableNodes
 }
-func (m mockRenderer) AggregateMetadata(rpt report.Report, localID, remoteID string) render.AggregateMetadata {
-	return m.aggregateMetadata
+func (m mockRenderer) EdgeMetadata(rpt report.Report, localID, remoteID string) report.EdgeMetadata {
+	return m.edgeMetadata
 }
 
 func TestReduceRender(t *testing.T) {
@@ -36,12 +36,12 @@ func TestReduceRender(t *testing.T) {
 
 func TestReduceEdge(t *testing.T) {
 	renderer := render.Reduce([]render.Renderer{
-		mockRenderer{aggregateMetadata: render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(1)}}},
-		mockRenderer{aggregateMetadata: render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(2)}}},
+		mockRenderer{edgeMetadata: report.EdgeMetadata{PacketCount: newu64(1)}},
+		mockRenderer{edgeMetadata: report.EdgeMetadata{PacketCount: newu64(2)}},
 	})
 
-	want := render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{PacketCount: newu64(3)}}
-	have := renderer.AggregateMetadata(report.MakeReport(), "", "")
+	want := report.EdgeMetadata{PacketCount: newu64(3)}
+	have := renderer.EdgeMetadata(report.MakeReport(), "", "")
 
 	if !reflect.DeepEqual(want, have) {
 		t.Errorf("want %+v, have %+v", want, have)
@@ -139,12 +139,10 @@ func TestMapEdge(t *testing.T) {
 		},
 	}
 
-	want := render.AggregateMetadata{EdgeMetadata: report.EdgeMetadata{
+	if want, have := (report.EdgeMetadata{
 		PacketCount: newu64(1),
 		ByteCount:   newu64(2),
-	}}
-	have := mapper.AggregateMetadata(report.MakeReport(), "_foo", "_bar")
-	if !reflect.DeepEqual(want, have) {
+	}), mapper.EdgeMetadata(report.MakeReport(), "_foo", "_bar"); !reflect.DeepEqual(want, have) {
 		t.Errorf("want %+v, have %+v", want, have)
 	}
 }
