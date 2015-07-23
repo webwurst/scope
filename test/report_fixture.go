@@ -240,6 +240,10 @@ var (
 			},
 			EdgeMetadatas: report.EdgeMetadatas{},
 		},
+		Sampling: report.Sampling{
+			Count: 1024,
+			Total: 4096,
+		},
 	}
 )
 

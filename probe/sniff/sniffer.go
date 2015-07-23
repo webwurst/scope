@@ -16,7 +16,7 @@ import (
 // Sniffer is a packet-sniffing reporter.
 type Sniffer struct {
 	hostID  string
-	reports chan report.Report
+	reports chan chan report.Report
 	parser  *gopacket.DecodingLayerParser
 	decoded []gopacket.LayerType
 	eth     layers.Ethernet
@@ -35,7 +35,7 @@ type Sniffer struct {
 func New(hostID string, src gopacket.ZeroCopyPacketDataSource, on, off time.Duration) *Sniffer {
 	s := &Sniffer{
 		hostID:  hostID,
-		reports: make(chan report.Report),
+		reports: make(chan chan report.Report),
 	}
 	s.parser = gopacket.NewDecodingLayerParser(
 		layers.LayerTypeEthernet,
@@ -47,7 +47,9 @@ func New(hostID string, src gopacket.ZeroCopyPacketDataSource, on, off time.Dura
 
 // Report implements the Reporter interface.
 func (s *Sniffer) Report() (report.Report, error) {
-	return <-s.reports, nil
+	c := make(chan report.Report)
+	s.reports <- c
+	return <-c, nil
 }
 
 func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Duration) {
@@ -82,11 +84,37 @@ func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Durat
 			turnOn = time.After(off)        // enable the on switch
 			turnOff = nil                   // disable the off switch
 
-		case s.reports <- rpt:
+		case c := <-s.reports:
+			rpt.Sampling.Count = atomic.LoadUint64(&count)
+			rpt.Sampling.Total = atomic.LoadUint64(&total)
+			applySampling(rpt)
+			c <- rpt
+			atomic.StoreUint64(&count, 0)
+			atomic.StoreUint64(&total, 0)
 			rpt = report.MakeReport()
 
 		case <-done:
 			return
+		}
+	}
+}
+
+// applySampling compensates for sampling by artifically inflating counts
+// throughout the report. It should be run once, by the probe, before emitting
+// the report upstream.
+func applySampling(r report.Report) {
+	if r.Sampling.Total <= 0 {
+		return
+	}
+	m := 1.0 / r.Sampling.Rate()
+	for _, topology := range r.Topologies() {
+		for _, emd := range topology.EdgeMetadatas {
+			if emd.PacketCount != nil {
+				*emd.ByteCount *= uint64(float64(*emd.PacketCount) * m)
+			}
+			if emd.ByteCount != nil {
+				*emd.ByteCount *= uint64(float64(*emd.ByteCount) * m)
+			}
 		}
 	}
 }
