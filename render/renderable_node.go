@@ -8,16 +8,15 @@ import (
 // an element of a topology. It should contain information that's relevant
 // to rendering a node when there are many nodes visible at once.
 type RenderableNode struct {
-	ID         string        `json:"id"`                    //
-	LabelMajor string        `json:"label_major"`           // e.g. "process", human-readable
-	LabelMinor string        `json:"label_minor,omitempty"` // e.g. "hostname", human-readable, optional
-	Rank       string        `json:"rank"`                  // to help the layout engine
-	Pseudo     bool          `json:"pseudo,omitempty"`      // sort-of a placeholder node, for rendering purposes
-	Adjacency  report.IDList `json:"adjacency,omitempty"`   // Node IDs (in the same topology domain)
-	Origins    report.IDList `json:"origins,omitempty"`     // Core node IDs that contributed information
-
-	report.EdgeMetadata `json:"metadata"` // Numeric sums
-	report.NodeMetadata `json:"-"`        // merged NodeMetadata of the nodes used to build this
+	ID           string              `json:"id"`                    //
+	LabelMajor   string              `json:"label_major"`           // e.g. "process", human-readable
+	LabelMinor   string              `json:"label_minor,omitempty"` // e.g. "hostname", human-readable, optional
+	Rank         string              `json:"rank"`                  // to help the layout engine
+	Pseudo       bool                `json:"pseudo,omitempty"`      // sort-of a placeholder node, for rendering purposes
+	Adjacency    report.IDList       `json:"adjacency,omitempty"`   // Node IDs (in the same topology domain)
+	Origins      report.IDList       `json:"origins,omitempty"`     // Core node IDs that contributed information
+	EdgeMetadata report.EdgeMetadata `json:"metadata"`              // Numeric sums
+	NodeMetadata report.NodeMetadata `json:"-"`                     // merged NodeMetadata of the nodes used to build this
 }
 
 // RenderableNodes is a set of RenderableNodes
@@ -60,7 +59,7 @@ func (rn *RenderableNode) Merge(other RenderableNode) {
 	rn.NodeMetadata.Merge(other.NodeMetadata)
 }
 
-// NewRenderableNode makes a new RenderableNode
+// NewRenderableNode makes a new RenderableNode.
 func NewRenderableNode(id, major, minor, rank string, nmd report.NodeMetadata) RenderableNode {
 	return RenderableNode{
 		ID:           id,

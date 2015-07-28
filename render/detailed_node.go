@@ -2,15 +2,146 @@ package render
 
 import (
 	"fmt"
-	"sort"
-	"strconv"
+	"log"
+	"time"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/host"
-	"github.com/weaveworks/scope/probe/process"
+
 	"github.com/weaveworks/scope/report"
 )
 
+// DetailedNode is the data type that's yielded to the JavaScript layer when
+// we want deep information about an individual node.
+type DetailedNode struct {
+	ID         string             `json:"id"`                    // unique
+	LabelMajor string             `json:"label_major"`           // big header, e.g. "container_name"
+	LabelMinor string             `json:"label_minor,omitempty"` // small header, e.g. "host.domain.org"
+	Pseudo     bool               `json:"pseudo,omitempty"`      // if true, changes rendering
+	Sections   map[string]Section `json:"sections,omitempty"`
+}
+
+// Section is a simple JSON-marshalable key-value map. It's deliberately kept
+// underspecified for right now, as we want some flexibility to change what
+// data we submit to the UI for rendering while we figure out what makes
+// sense.
+type Section map[string]interface{}
+
+// These variables are keys in the sections map.
+var (
+	SectionHosts      = "hosts"
+	SectionEndpoints  = "endpoints"
+	SectionAddresses  = "addresses"
+	SectionContainers = "containers"
+	SectionProcesses  = "processes"
+)
+
+// MakeDetailedNode transforms a renderable node to a detailed node. It uses
+// the renderable node's metadata to perform lookups in the report struct for
+// the various sections.
+func MakeDetailedNode(rpt report.Report, n RenderableNode) DetailedNode {
+	sections := map[string]Section{}
+	for key, f := range map[string]func(report.Report, RenderableNode) Section{
+		SectionHosts:      makeHostsSection,      // origin host(s)
+		SectionEndpoints:  makeEndpointsSection,  // port-to-port connections
+		SectionAddresses:  makeAddressesSection,  // address-to-address connections
+		SectionContainers: makeContainersSection, // contributing container(s)
+		SectionProcesses:  makeProcessesSection,  // contributing process(es)
+	} {
+		if section := f(rpt, n); len(section) > 0 {
+			sections[key] = section
+		}
+	}
+	return DetailedNode{
+		ID:         n.ID,
+		LabelMajor: n.LabelMajor,
+		LabelMinor: n.LabelMinor,
+		Pseudo:     n.Pseudo,
+		Sections:   sections,
+	}
+}
+
+func makeHostsSection(rpt report.Report, n RenderableNode) Section {
+	section := Section{}
+	for _, id := range n.Origins {
+		if nmd, ok := rpt.Host.NodeMetadatas[id]; ok {
+			section[id] = map[string]string{
+				host.HostName:      nmd.Metadata[host.HostName],
+				host.OS:            nmd.Metadata[host.OS],
+				host.Load:          nmd.Metadata[host.Load],
+				host.Uptime:        nmd.Metadata[host.Uptime],
+				host.KernelVersion: nmd.Metadata[host.KernelVersion],
+			}
+		}
+	}
+	return section
+}
+
+// These are keys for endpoint and address sections.
+const (
+	ConnectionSrc        = "src"
+	ConnectionDst        = "dst"
+	ConnectionPacketRate = "packet_rate"
+	ConnectionByteRate   = "byte_rate"
+)
+
+func makeEndpointsSection(rpt report.Report, n RenderableNode) Section {
+	section := Section{}
+	for _, srcNodeID := range n.Origins {
+		if _, ok := rpt.Endpoint.NodeMetadatas[srcNodeID]; ok {
+			adjacencyID := report.MakeAdjacencyID(srcNodeID)
+			for _, dstNodeID := range rpt.Endpoint.Adjacency[adjacencyID] {
+				edgeID := report.MakeEdgeID(srcNodeID, dstNodeID)
+				section[edgeID] = makeEndpointSection(rpt.Endpoint, srcNodeID, dstNodeID, rpt.Window)
+			}
+		}
+	}
+	return section
+}
+
+func makeEndpointSection(t report.Topology, srcNodeID, dstNodeID string, window time.Duration) Section {
+	_, srcAddr, srcPort, ok := report.ParseEndpointNodeID(srcNodeID)
+	if !ok {
+		log.Printf("endpoint section: bad src ID %q", srcNodeID)
+		return Section{}
+	}
+
+	_, dstAddr, dstPort, ok := report.ParseEndpointNodeID(dstNodeID)
+	if !ok {
+		log.Printf("endpoint section: bad src ID %q", srcNodeID)
+		return Section{}
+	}
+
+	section := Section{
+		ConnectionSrc: fmt.Sprintf("%s:%s", srcAddr, srcPort),
+		ConnectionDst: fmt.Sprintf("%s:%s", dstAddr, dstPort),
+	}
+
+	edgeID := report.MakeEdgeID(srcNodeID, dstNodeID)
+	if emd, ok := t.EdgeMetadatas[edgeID]; ok {
+		if emd.PacketCount != nil {
+			section[ConnectionPacketRate] = fmt.Sprint(uint64(float64(*emd.PacketCount) / window.Seconds()))
+		}
+		if emd.ByteCount != nil {
+			section[ConnectionByteRate] = fmt.Sprint(uint64(float64(*emd.ByteCount) / window.Seconds()))
+		}
+	}
+
+	return section
+}
+
+func makeAddressesSection(rpt report.Report, n RenderableNode) Section {
+	return Section{} // TODO
+}
+
+func makeContainersSection(rpt report.Report, n RenderableNode) Section {
+	return Section{} // TODO
+}
+
+func makeProcessesSection(rpt report.Report, n RenderableNode) Section {
+	return Section{} // TODO
+}
+
+/*
 const (
 	mb                 = 1 << 20
 	connectionsRank    = 100
@@ -253,3 +384,4 @@ func hostOriginTable(nmd report.NodeMetadata) (Table, bool) {
 		Rank:    hostRank,
 	}, len(rows) > 0
 }
+*/

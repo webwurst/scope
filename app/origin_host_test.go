@@ -19,15 +19,15 @@ func TestAPIOriginHost(t *testing.T) {
 	{
 		// Origin
 		body := getRawJSON(t, ts, fmt.Sprintf("/api/origin/host/%s", test.ServerHostNodeID))
-		var o OriginHost
-		if err := json.Unmarshal(body, &o); err != nil {
-			t.Fatalf("JSON parse error: %s", err)
+		var h OriginHost
+		if err := json.Unmarshal(body, &h); err != nil {
+			t.Fatal(err)
 		}
-		if want, have := "Linux", o.OS; want != have {
-			t.Errorf("Origin error. Want %v, have %v", want, have)
+		if want, have := test.ServerHostOS, h.OS; want != have {
+			t.Errorf("want %q, have %q", want, have)
 		}
-		if want, have := "0.01 0.01 0.01", o.Load; want != have {
-			t.Errorf("Origin error. Want %v, have %v", want, have)
+		if want, have := test.ServerHostLoad, h.Load; want != have {
+			t.Errorf("want %q, have %q", want, have)
 		}
 	}
 }

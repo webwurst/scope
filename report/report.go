@@ -1,6 +1,9 @@
 package report
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Report is the core data type. It's produced by probes, and consumed and
 // stored by apps. It's composed of multiple topologies, each representing
@@ -39,8 +42,16 @@ type Report struct {
 	// their status endpoints. Edges could be present, but aren't currently.
 	Overlay Topology
 
-	// Sampling data for this report.
+	// Sampling data for this report, which (at the moment) comes from the
+	// sniffer module. If there's no packets sniffed, there's no samling
+	// information, and the effective sample rate is 1.0.
 	Sampling
+
+	// Window is the amount of time covered by the report. It's necessary to
+	// calculate rates. In practice, probes set it to their publish interval,
+	// and apps set it on the uber-report they generate based on the delta of
+	// the oldest and newest report.
+	Window time.Duration
 }
 
 // MakeReport makes a clean report, ready to Merge() other reports into.
@@ -71,6 +82,9 @@ func (r Report) Topologies() []Topology {
 
 // Validate checks the report for various inconsistencies.
 func (r Report) Validate() error {
+	if r.Window <= 0 {
+		return fmt.Errorf("window wasn't set")
+	}
 	var packets uint64
 	for _, topology := range r.Topologies() {
 		if err := topology.Validate(); err != nil {

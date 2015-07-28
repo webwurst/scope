@@ -3,7 +3,8 @@ package report
 // Merge functions for all topology datatypes. The general semantics are that
 // the receiver is modified, and what's merged in isn't.
 
-// Merge merges another Report into the receiver.
+// Merge merges another report into the receiver. After merging reports, be
+// sure to update the resulting window.
 func (r *Report) Merge(other Report) {
 	r.Endpoint.Merge(other.Endpoint)
 	r.Address.Merge(other.Address)
@@ -14,14 +15,14 @@ func (r *Report) Merge(other Report) {
 	r.Overlay.Merge(other.Overlay)
 }
 
-// Merge merges another Topology into the receiver.
+// Merge merges another topology into the receiver.
 func (t *Topology) Merge(other Topology) {
 	t.Adjacency.Merge(other.Adjacency)
 	t.EdgeMetadatas.Merge(other.EdgeMetadatas)
 	t.NodeMetadatas.Merge(other.NodeMetadatas)
 }
 
-// Merge merges another Adjacency list into the receiver.
+// Merge merges another adjacency list into the receiver.
 func (a *Adjacency) Merge(other Adjacency) {
 	for addr, adj := range other {
 		(*a)[addr] = (*a)[addr].Merge(adj)

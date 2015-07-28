@@ -1,56 +1,14 @@
 package render_test
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/weaveworks/scope/probe/host"
 	"github.com/weaveworks/scope/render"
+	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/test"
 )
-
-func TestOriginTable(t *testing.T) {
-	if _, ok := render.OriginTable(test.Report, "not-found"); ok {
-		t.Errorf("unknown origin ID gave unexpected success")
-	}
-	for originID, want := range map[string]render.Table{
-		test.ClientAddressNodeID: {
-			Title:   "Origin Address",
-			Numeric: false,
-			Rows: []render.Row{
-				{"Address", test.ClientIP, ""},
-			},
-		},
-		test.ServerProcessNodeID: {
-			Title:   "Origin Process",
-			Numeric: false,
-			Rank:    2,
-			Rows: []render.Row{
-				{"Name (comm)", "apache", ""},
-				{"PID", test.ServerPID, ""},
-			},
-		},
-		test.ServerHostNodeID: {
-			Title:   "Origin Host",
-			Numeric: false,
-			Rank:    1,
-			Rows: []render.Row{
-				{"Host name", test.ServerHostName, ""},
-				{"Load", "0.01 0.01 0.01", ""},
-				{"Operating system", "Linux", ""},
-			},
-		},
-	} {
-		have, ok := render.OriginTable(test.Report, originID)
-		if !ok {
-			t.Errorf("%q: not OK", originID)
-			continue
-		}
-		if !reflect.DeepEqual(want, have) {
-			t.Errorf("%q: %s", originID, test.Diff(want, have))
-		}
-	}
-}
 
 func TestMakeDetailedNode(t *testing.T) {
 	renderableNode := render.ContainerRenderer.Render(test.Report)[test.ServerContainerID]
@@ -60,85 +18,55 @@ func TestMakeDetailedNode(t *testing.T) {
 		LabelMajor: "server",
 		LabelMinor: test.ServerHostName,
 		Pseudo:     false,
-		Tables: []render.Table{
-			{
-				Title:   "Connections",
-				Numeric: true,
-				Rank:    100,
-				Rows: []render.Row{
-					{"Packets", "150", ""},
-					{"Bytes", "1500", ""},
+		Sections: map[string]render.Section{
+			render.SectionHosts: render.Section{
+				test.ServerHostNodeID: map[string]string{
+					host.HostName:      test.ServerHostName,
+					host.OS:            test.ServerHostOS,
+					host.Load:          test.ServerHostLoad,
+					host.Uptime:        test.ServerHostUptime,
+					host.KernelVersion: test.ServerHostKernelVersion,
 				},
 			},
-			{
-				Title:   "Origin Container",
-				Numeric: false,
-				Rank:    3,
-				Rows: []render.Row{
-					{"ID", test.ServerContainerID, ""},
-					{"Name", "server", ""},
-					{"Image ID", test.ServerContainerImageID, ""},
+			render.SectionEndpoints: render.Section{
+				report.MakeEdgeID(test.Server80NodeID, test.UnknownClient1NodeID): render.Section{
+					render.ConnectionSrc:        test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst:        test.UnknownClient1IP + ":" + test.ClientPort54010,
+					render.ConnectionPacketRate: "20",
+					render.ConnectionByteRate:   "200",
 				},
-			},
-			{
-				Title:   "Origin Process",
-				Numeric: false,
-				Rank:    2,
-				Rows: []render.Row{
-					{"Name (comm)", "apache", ""},
-					{"PID", test.ServerPID, ""},
+				report.MakeEdgeID(test.Server80NodeID, test.UnknownClient2NodeID): render.Section{
+					render.ConnectionSrc:        test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst:        test.UnknownClient1IP + ":" + test.ClientPort54020,
+					render.ConnectionPacketRate: "26",
+					render.ConnectionByteRate:   "266",
 				},
-			},
-			{
-				Title:   "Origin Host",
-				Numeric: false,
-				Rank:    1,
-				Rows: []render.Row{
-					{"Host name", test.ServerHostName, ""},
-					{"Load", "0.01 0.01 0.01", ""},
-					{"Operating system", "Linux", ""},
+				report.MakeEdgeID(test.Server80NodeID, test.UnknownClient3NodeID): render.Section{
+					render.ConnectionSrc:        test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst:        test.UnknownClient3IP + ":" + test.ClientPort54020,
+					render.ConnectionPacketRate: "33",
+					render.ConnectionByteRate:   "333",
 				},
-			},
-			{
-				Title:   "Connection Details",
-				Numeric: false,
-				Rows: []render.Row{
-					{"Local", "Remote", ""},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.UnknownClient1IP, test.ClientPort54010),
-						"",
-					},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.UnknownClient1IP, test.ClientPort54020),
-						"",
-					},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.UnknownClient3IP, test.ClientPort54020),
-						"",
-					},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.ClientIP, test.ClientPort54001),
-						"",
-					},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.ClientIP, test.ClientPort54002),
-						"",
-					},
-					{
-						fmt.Sprintf("%s:%s", test.ServerIP, test.ServerPort),
-						fmt.Sprintf("%s:%s", test.RandomClientIP, test.ClientPort12345),
-						"",
-					},
+				report.MakeEdgeID(test.Server80NodeID, test.Client54001NodeID): render.Section{
+					render.ConnectionSrc:        test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst:        test.ClientIP + ":" + test.ClientPort54001,
+					render.ConnectionPacketRate: "6",
+					render.ConnectionByteRate:   "66",
+				},
+				report.MakeEdgeID(test.Server80NodeID, test.Client54002NodeID): render.Section{
+					render.ConnectionSrc:        test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst:        test.ClientIP + ":" + test.ClientPort54002,
+					render.ConnectionPacketRate: "13",
+					render.ConnectionByteRate:   "133",
+				},
+				report.MakeEdgeID(test.Server80NodeID, test.RandomClientNodeID): render.Section{
+					render.ConnectionSrc: test.ServerIP + ":" + test.ServerPort,
+					render.ConnectionDst: test.RandomClientIP + ":" + test.ClientPort12345,
 				},
 			},
 		},
 	}
 	if !reflect.DeepEqual(want, have) {
-		t.Errorf("%s", test.Diff(want, have))
+		t.Error(test.Diff(want, have))
 	}
 }

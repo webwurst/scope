@@ -35,7 +35,6 @@ func NewReportLIFO(r reporter, maxAge time.Duration) *ReportLIFO {
 		requests: make(chan chan report.Report),
 		quit:     make(chan chan struct{}),
 	}
-
 	go func() {
 		for {
 			select {
@@ -50,11 +49,18 @@ func NewReportLIFO(r reporter, maxAge time.Duration) *ReportLIFO {
 
 			case req := <-l.requests:
 				// Request for the current report.
-				report := report.MakeReport()
+				var (
+					rpt    = report.MakeReport()
+					oldest = time.Now()
+				)
 				for _, r := range l.reports {
-					report.Merge(r.Report)
+					rpt.Merge(r.Report)
+					if r.Timestamp.Before(oldest) {
+						oldest = r.Timestamp
+					}
 				}
-				req <- report
+				rpt.Window = time.Now().Sub(oldest)
+				req <- rpt
 
 			case q := <-l.quit:
 				close(q)

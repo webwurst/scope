@@ -18,7 +18,7 @@ const (
 	network  = "192.168.0.0/16"
 	hostID   = "hostid"
 	now      = "now"
-	hostname = "hostname"
+	hostName = "hostname"
 	load     = "0.59 0.36 0.29"
 	uptime   = "278h55m43s"
 	kernel   = "release version"
@@ -48,14 +48,15 @@ func TestReporter(t *testing.T) {
 	want := report.MakeReport()
 	want.Host.NodeMetadatas[report.MakeHostNodeID(hostID)] = report.NewNodeMetadata(map[string]string{
 		host.Timestamp:     now,
-		host.HostName:      hostname,
+		host.HostID:        hostID,
+		host.HostName:      hostName,
 		host.LocalNetworks: network,
 		host.OS:            runtime.GOOS,
 		host.Load:          load,
 		host.Uptime:        uptime,
 		host.KernelVersion: kernel,
 	})
-	r := host.NewReporter(hostID, hostname)
+	r := host.NewReporter(hostID, hostName)
 	have, _ := r.Report()
 	if !reflect.DeepEqual(want, have) {
 		t.Errorf("%s", test.Diff(want, have))

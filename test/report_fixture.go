@@ -1,13 +1,18 @@
 package test
 
 import (
+	"time"
+
 	"github.com/weaveworks/scope/probe/docker"
+	"github.com/weaveworks/scope/probe/host"
 	"github.com/weaveworks/scope/report"
 )
 
 // This is an example Report:
 //   2 hosts with probes installed - client & server.
 var (
+	Window = 1500 * time.Millisecond
+
 	ClientHostID  = "client.hostname.com"
 	ServerHostID  = "server.hostname.com"
 	UnknownHostID = ""
@@ -41,13 +46,13 @@ var (
 	ClientHostNodeID = report.MakeHostNodeID(ClientHostID)
 	ServerHostNodeID = report.MakeHostNodeID(ServerHostID)
 
-	Client54001NodeID    = report.MakeEndpointNodeID(ClientHostID, ClientIP, ClientPort54001) // curl (1)
-	Client54002NodeID    = report.MakeEndpointNodeID(ClientHostID, ClientIP, ClientPort54002) // curl (2)
-	Server80NodeID       = report.MakeEndpointNodeID(ServerHostID, ServerIP, ServerPort)      // apache
-	UnknownClient1NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient1IP, "54010") // we want to ensure two unknown clients, connnected
-	UnknownClient2NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient2IP, "54020") // to the same server, are deduped.
-	UnknownClient3NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient3IP, "54020") // Check this one isn't deduped
-	RandomClientNodeID   = report.MakeEndpointNodeID(ServerHostID, RandomClientIP, "12345")   // this should become an internet node
+	Client54001NodeID    = report.MakeEndpointNodeID(ClientHostID, ClientIP, ClientPort54001)         // curl (1)
+	Client54002NodeID    = report.MakeEndpointNodeID(ClientHostID, ClientIP, ClientPort54002)         // curl (2)
+	Server80NodeID       = report.MakeEndpointNodeID(ServerHostID, ServerIP, ServerPort)              // apache
+	UnknownClient1NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient1IP, ClientPort54010) // we want to ensure two unknown clients, connnected
+	UnknownClient2NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient2IP, ClientPort54020) // to the same server, are deduped.
+	UnknownClient3NodeID = report.MakeEndpointNodeID(ServerHostID, UnknownClient3IP, ClientPort54020) // Check this one isn't deduped
+	RandomClientNodeID   = report.MakeEndpointNodeID(ServerHostID, RandomClientIP, ClientPort12345)   // this should become an internet node
 
 	ClientProcess1NodeID      = report.MakeProcessNodeID(ClientHostID, Client1PID)
 	ClientProcess2NodeID      = report.MakeProcessNodeID(ClientHostID, Client2PID)
@@ -66,11 +71,17 @@ var (
 	ClientContainerImageName   = "image/client"
 	ServerContainerImageName   = "image/server"
 
-	ClientAddressNodeID   = report.MakeAddressNodeID(ClientHostID, "10.10.10.20")
-	ServerAddressNodeID   = report.MakeAddressNodeID(ServerHostID, "192.168.1.1")
-	UnknownAddress1NodeID = report.MakeAddressNodeID(ServerHostID, "10.10.10.10")
-	UnknownAddress2NodeID = report.MakeAddressNodeID(ServerHostID, "10.10.10.11")
-	RandomAddressNodeID   = report.MakeAddressNodeID(ServerHostID, "51.52.53.54") // this should become an internet node
+	ClientAddressNodeID   = report.MakeAddressNodeID(ClientHostID, ClientIP)
+	ServerAddressNodeID   = report.MakeAddressNodeID(ServerHostID, ServerIP)
+	UnknownAddress1NodeID = report.MakeAddressNodeID(ServerHostID, UnknownClient1IP)
+	UnknownAddress2NodeID = report.MakeAddressNodeID(ServerHostID, UnknownClient3IP)
+	RandomAddressNodeID   = report.MakeAddressNodeID(ServerHostID, RandomClientIP) // this should become an internet node
+
+	ServerHostOS            = "Linux"
+	ServerHostLoad          = "0.3 0.2 0.1"
+	ServerHostUptime        = "42d 1h 1m"
+	ServerHostLocalNetworks = "10.10.10.0/24"
+	ServerHostKernelVersion = "kv-whatever"
 
 	Report = report.Report{
 		Endpoint: report.Topology{
@@ -231,11 +242,13 @@ var (
 					report.HostNodeID: ClientHostNodeID,
 				}),
 				ServerHostNodeID: report.NewNodeMetadata(map[string]string{
-					"host_name":       ServerHostName,
-					"local_networks":  "10.10.10.0/24",
-					"os":              "Linux",
-					"load":            "0.01 0.01 0.01",
-					report.HostNodeID: ServerHostNodeID,
+					host.HostName:      ServerHostName,
+					host.OS:            ServerHostOS,
+					host.Load:          ServerHostLoad,
+					host.Uptime:        ServerHostUptime,
+					host.LocalNetworks: ServerHostLocalNetworks,
+					host.KernelVersion: ServerHostKernelVersion,
+					report.HostNodeID:  ServerHostNodeID,
 				}),
 			},
 			EdgeMetadatas: report.EdgeMetadatas{},
@@ -244,6 +257,7 @@ var (
 			Count: 1024,
 			Total: 4096,
 		},
+		Window: Window,
 	}
 )
 

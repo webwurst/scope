@@ -12,6 +12,7 @@ import (
 // Keys for use in NodeMetadata
 const (
 	Timestamp     = "ts"
+	HostID        = "host_id"
 	HostName      = "host_name"
 	LocalNetworks = "local_networks"
 	OS            = "os"
@@ -77,6 +78,7 @@ func (r *Reporter) Report() (report.Report, error) {
 
 	rep.Host.NodeMetadatas[report.MakeHostNodeID(r.hostID)] = report.NewNodeMetadata(map[string]string{
 		Timestamp:     Now(),
+		HostID:        r.hostID,
 		HostName:      r.hostName,
 		LocalNetworks: strings.Join(localCIDRs, " "),
 		OS:            runtime.GOOS,
