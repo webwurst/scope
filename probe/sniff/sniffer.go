@@ -103,17 +103,18 @@ func (s *Sniffer) loop(src gopacket.ZeroCopyPacketDataSource, on, off time.Durat
 // throughout the report. It should be run once, by the probe, before emitting
 // the report upstream.
 func applySampling(r report.Report) {
-	if r.Sampling.Total <= 0 {
+	rate := r.Sampling.Rate()
+	if rate >= 1.0 {
 		return
 	}
-	m := 1.0 / r.Sampling.Rate()
+	factor := 1.0 / rate
 	for _, topology := range r.Topologies() {
 		for _, emd := range topology.EdgeMetadatas {
 			if emd.PacketCount != nil {
-				*emd.ByteCount *= uint64(float64(*emd.PacketCount) * m)
+				*emd.PacketCount = uint64(float64(*emd.PacketCount) * factor)
 			}
 			if emd.ByteCount != nil {
-				*emd.ByteCount *= uint64(float64(*emd.ByteCount) * m)
+				*emd.ByteCount = uint64(float64(*emd.ByteCount) * factor)
 			}
 		}
 	}
