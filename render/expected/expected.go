@@ -368,6 +368,53 @@ var (
 			Origins:      report.MakeIDList(test.RandomAddressNodeID),
 		},
 	}).Prune()
+
+	// TODO: Put these strings somewhere?
+	Pod1RenderedID = render.MakePodID(test.ServerHostID, "ping/pong")
+	Pod2RenderedID = render.MakePodID(test.ClientHostID, "wiff/waff")
+
+	// TODO: Is this right? adjacencies ok?
+	// TODO: Add some pseudo-nodes?
+	RenderedKubernetes = Sterilize(render.RenderableNodes{
+		Pod1RenderedID: {
+			ID:         Pod1RenderedID,
+			LabelMajor: "pong",         // before first .
+			LabelMinor: "hostname.com", // after first .
+			Rank:       "hostname.com",
+			Pseudo:     false,
+			Origins: report.MakeIDList(
+				test.ServerHostNodeID,
+				test.ServerAddressNodeID,
+			),
+			Node: report.MakeNode(),
+			EdgeMetadata: report.EdgeMetadata{
+				MaxConnCountTCP: newu64(3),
+			},
+		},
+		Pod2RenderedID: {
+			ID:         Pod2RenderedID,
+			LabelMajor: "waff",         // before first .
+			LabelMinor: "hostname.com", // after first .
+			Rank:       "hostname.com",
+			Pseudo:     false,
+			Origins: report.MakeIDList(
+				test.ClientHostNodeID,
+				test.ClientAddressNodeID,
+			),
+			Node: report.MakeNode().WithAdjacent(ServerHostRenderedID),
+			EdgeMetadata: report.EdgeMetadata{
+				MaxConnCountTCP: newu64(3),
+			},
+		},
+		render.TheInternetID: {
+			ID:           render.TheInternetID,
+			LabelMajor:   render.TheInternetMajor,
+			Pseudo:       true,
+			Node:         report.MakeNode().WithAdjacent(ServerHostRenderedID),
+			EdgeMetadata: report.EdgeMetadata{},
+			Origins:      report.MakeIDList(test.RandomAddressNodeID),
+		},
+	}).Prune()
 )
 
 func newu64(value uint64) *uint64 { return &value }

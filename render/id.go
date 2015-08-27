@@ -25,6 +25,11 @@ func MakeHostID(hostID string) string {
 	return fmt.Sprintf("host:%s", hostID)
 }
 
+// MakePodID makes an pod node ID for rendered nodes.
+func MakePodID(hostID, id string) string {
+	return fmt.Sprintf("pod:%s:%s", hostID, id)
+}
+
 // MakePseudoNodeID produces a pseudo node ID from its composite parts,
 // for use in rendered nodes.
 func MakePseudoNodeID(parts ...string) string {

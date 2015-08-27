@@ -62,3 +62,11 @@ func TestHostRenderer(t *testing.T) {
 		t.Error(test.Diff(want, have))
 	}
 }
+
+func TestKubernetesRenderer(t *testing.T) {
+	have := expected.Sterilize(render.KubernetesRenderer.Render(test.Report))
+	want := expected.RenderedKubernetes
+	if !reflect.DeepEqual(want, have) {
+		t.Error(test.Diff(want, have))
+	}
+}

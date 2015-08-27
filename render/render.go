@@ -259,6 +259,13 @@ func (f Filter) Stats(rpt report.Report) Stats {
 	return upstream
 }
 
+// not inverts a filter predicate
+func not(f func(r RenderableNode) bool) func(r RenderableNode) bool {
+	return func(r RenderableNode) bool {
+		return !f(r)
+	}
+}
+
 // IsConnected is the key added to Node.Metadata by ColorConnected
 // to indicate a node has an edge pointing to it or from it
 const IsConnected = "is_connected"

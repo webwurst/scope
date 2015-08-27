@@ -178,6 +178,16 @@ var topologyRegistry = map[string]topologyView{
 		parent:   "",
 		renderer: render.HostRenderer,
 	},
+	"pods": {
+		human:    "Pods",
+		parent:   "",
+		renderer: render.PodRenderer,
+	},
+	"pods-by-service": {
+		human:    "by service",
+		parent:   "pods",
+		renderer: render.PodServiceRenderer,
+	},
 }
 
 type topologyView struct {
