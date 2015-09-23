@@ -49,16 +49,24 @@ const doLayout = function(nodes, edges, width, height, scale, margins, topologyI
   });
 
   // add node ranks for clustering
-  const ranks = _.uniq(_.pluck(nodes, 'rank'));
-  _.each(ranks, function(rank) {
-    const rankId = 'rank_' + rank;
-    if (!graph.hasNode(rankId)) {
-      graph.setNode(rankId, {});
+  const systemNodes = ['scope-app', 'scope-probe', 'weaveproxy'];
+  const ranksByHost = _.groupBy(nodes, function(node) {
+    if (_.includes(systemNodes, node.label)) {
+      return node.subLabel.split(' ')[0];
     }
   });
-  _.each(nodes, function(node) {
-    if (node.rank) {
-      graph.setParent(node.id, 'rank_' + node.rank);
+  _.each(ranksByHost, function(rankNodes, host) {
+    if (host) {
+      const rankId = 'rank_' + host;
+      debug('add rank', host);
+      if (!graph.hasNode(rankId)) {
+        graph.setNode(rankId, {});
+      }
+      _.each(rankNodes, function(node) {
+        if (node.rank) {
+          graph.setParent(node.id, rankId);
+        }
+      });
     }
   });
 
