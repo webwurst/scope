@@ -26,8 +26,8 @@ const doLayout = function(nodes, edges, width, height, scale, margins, topologyI
 
   // configure node margins
   graph.setGraph({
-    // nodesep: scale(1.5),
-    ranksep: scale(1.5)
+    nodesep: scale(2.0),
+    ranksep: scale(2.0)
   });
 
   // add nodes to the graph if not already there, and collect ranks
@@ -35,8 +35,8 @@ const doLayout = function(nodes, edges, width, height, scale, margins, topologyI
     if (!graph.hasNode(node.id)) {
       graph.setNode(node.id, {
         id: node.id,
-        width: scale(1.0),
-        height: scale(1.0)
+        width: scale(1.1),
+        height: scale(1.1)
       });
     }
   });
@@ -49,15 +49,17 @@ const doLayout = function(nodes, edges, width, height, scale, margins, topologyI
   });
 
   // add node ranks for clustering
-  const ranks = _.uniq(_.pluck(nodes, 'rank'));
-  _.each(ranks, function(rank) {
-    if (!graph.hasNode(rank)) {
-      graph.setNode('rank_' + rank, {});
-    }
-  });
-  _.each(nodes, function(node) {
-    if (node.rank) {
-      graph.setParent(node.id, 'rank_' + node.rank);
+  // find nodes of same rank that have connections between them
+  _.each(edges, function(edge) {
+    const rank = edge.source.rank;
+    if (rank && rank === edge.target.rank && edge.source.id !== edge.target.id) {
+      const rankId = 'rank_' + rank;
+      if (!graph.hasNode(rankId)) {
+        graph.setNode(rankId, {});
+        debug('make cluster for', rank);
+      }
+      graph.setParent(edge.source.id, 'rank_' + rank);
+      graph.setParent(edge.target.id, 'rank_' + rank);
     }
   });
 
