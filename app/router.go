@@ -182,11 +182,19 @@ var topologyRegistry = map[string]topologyView{
 		human:    "Pods",
 		parent:   "",
 		renderer: render.PodRenderer,
+		options: optionParams{"system": {
+			{"show", "System containers shown", false, nop},
+			{"hide", "System containers hidden", true, render.FilterSystem},
+		}},
 	},
 	"pods-by-service": {
 		human:    "by service",
 		parent:   "pods",
 		renderer: render.PodServiceRenderer,
+		options: optionParams{"system": {
+			{"show", "System containers shown", false, nop},
+			{"hide", "System containers hidden", true, render.FilterSystem},
+		}},
 	},
 }
 
