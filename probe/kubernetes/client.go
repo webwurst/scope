@@ -10,14 +10,9 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 )
 
+// These constants are keys used in node metadata
 const (
 	Namespace = "kubernetes_namespace"
-)
-
-// Vars exported for testing.
-var (
-	NewPodStub     = NewPod
-	NewServiceStub = NewService
 )
 
 // Client keeps track of running kubernetes pods and services
@@ -29,13 +24,14 @@ type Client interface {
 
 type client struct {
 	quit             chan struct{}
-	client           *unversioned.Client
+	client           cache.Getter
 	podReflector     *cache.Reflector
 	serviceReflector *cache.Reflector
 	podStore         *cache.StoreToPodLister
 	serviceStore     *cache.StoreToServiceLister
 }
 
+// NewClient returns a usable Client. Don't forget to Stop it.
 func NewClient(addr string, resyncPeriod time.Duration) (Client, error) {
 	c, err := unversioned.New(&unversioned.Config{Host: addr})
 	if err != nil {
@@ -58,9 +54,9 @@ func NewClient(addr string, resyncPeriod time.Duration) (Client, error) {
 		quit:             quit,
 		client:           c,
 		podReflector:     podReflector,
-		podStore:         &cache.StoreToPodLister{podStore},
+		podStore:         &cache.StoreToPodLister{Store: podStore},
 		serviceReflector: serviceReflector,
-		serviceStore:     &cache.StoreToServiceLister{serviceStore},
+		serviceStore:     &cache.StoreToServiceLister{Store: serviceStore},
 	}, nil
 }
 
@@ -70,7 +66,7 @@ func (c *client) WalkPods(f func(Pod) error) error {
 		return err
 	}
 	for _, pod := range pods {
-		if err := f(NewPodStub(pod)); err != nil {
+		if err := f(NewPod(pod)); err != nil {
 			return err
 		}
 	}
@@ -83,7 +79,7 @@ func (c *client) WalkServices(f func(Service) error) error {
 		return err
 	}
 	for i := range list.Items {
-		if err := f(NewServiceStub(&(list.Items[i]))); err != nil {
+		if err := f(NewService(&(list.Items[i]))); err != nil {
 			return err
 		}
 	}

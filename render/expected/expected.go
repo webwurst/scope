@@ -369,50 +369,138 @@ var (
 		},
 	}).Prune()
 
-	// TODO: Put these strings somewhere?
-	Pod1RenderedID = render.MakePodID(test.ServerHostID, "ping/pong")
-	Pod2RenderedID = render.MakePodID(test.ClientHostID, "wiff/waff")
-
-	// TODO: Is this right? adjacencies ok?
-	// TODO: Add some pseudo-nodes?
-	RenderedKubernetes = Sterilize(render.RenderableNodes{
-		Pod1RenderedID: {
-			ID:         Pod1RenderedID,
-			LabelMajor: "pong",         // before first .
-			LabelMinor: "hostname.com", // after first .
-			Rank:       "hostname.com",
+	RenderedPods = (render.RenderableNodes{
+		"ping/pong-a": {
+			ID:         "ping/pong-a",
+			LabelMajor: "pong-a",
+			LabelMinor: "1 container",
+			Rank:       "ping/pong-a",
 			Pseudo:     false,
 			Origins: report.MakeIDList(
+				test.Client54001NodeID,
+				test.Client54002NodeID,
+				test.ClientProcess1NodeID,
+				test.ClientProcess2NodeID,
+				test.ClientHostNodeID,
+				test.ClientContainerNodeID,
+				test.ClientContainerImageNodeID,
+				test.ClientPodNodeID,
+			),
+			Node: report.MakeNode().WithAdjacent("ping/pong-b"),
+			EdgeMetadata: report.EdgeMetadata{
+				EgressPacketCount: newu64(30),
+				EgressByteCount:   newu64(300),
+			},
+		},
+		"ping/pong-b": {
+			ID:         "ping/pong-b",
+			LabelMajor: "pong-b",
+			LabelMinor: "1 container",
+			Rank:       "ping/pong-b",
+			Pseudo:     false,
+			Origins: report.MakeIDList(
+				test.Server80NodeID,
+				test.ServerPodNodeID,
+				test.ServerProcessNodeID,
+				test.ServerContainerNodeID,
 				test.ServerHostNodeID,
-				test.ServerAddressNodeID,
+				test.ServerContainerImageNodeID,
 			),
 			Node: report.MakeNode(),
 			EdgeMetadata: report.EdgeMetadata{
-				MaxConnCountTCP: newu64(3),
+				IngressPacketCount: newu64(210),
+				IngressByteCount:   newu64(2100),
 			},
 		},
-		Pod2RenderedID: {
-			ID:         Pod2RenderedID,
-			LabelMajor: "waff",         // before first .
-			LabelMinor: "hostname.com", // after first .
-			Rank:       "hostname.com",
-			Pseudo:     false,
+		uncontainedServerID: {
+			ID:         uncontainedServerID,
+			LabelMajor: render.UncontainedMajor,
+			LabelMinor: test.ServerHostName,
+			Rank:       "",
+			Pseudo:     true,
 			Origins: report.MakeIDList(
-				test.ClientHostNodeID,
-				test.ClientAddressNodeID,
+				test.ServerHostNodeID,
+				test.NonContainerProcessNodeID,
+				test.NonContainerNodeID,
 			),
-			Node: report.MakeNode().WithAdjacent(ServerHostRenderedID),
-			EdgeMetadata: report.EdgeMetadata{
-				MaxConnCountTCP: newu64(3),
-			},
+			Node:         report.MakeNode().WithAdjacent(render.TheInternetID),
+			EdgeMetadata: report.EdgeMetadata{},
 		},
 		render.TheInternetID: {
-			ID:           render.TheInternetID,
-			LabelMajor:   render.TheInternetMajor,
-			Pseudo:       true,
-			Node:         report.MakeNode().WithAdjacent(ServerHostRenderedID),
+			ID:         render.TheInternetID,
+			LabelMajor: render.TheInternetMajor,
+			Pseudo:     true,
+			Node:       report.MakeNode().WithAdjacent("ping/pong-b"),
+			EdgeMetadata: report.EdgeMetadata{
+				EgressPacketCount: newu64(60),
+				EgressByteCount:   newu64(600),
+			},
+			Origins: report.MakeIDList(
+				test.RandomClientNodeID,
+				test.GoogleEndpointNodeID,
+			),
+		},
+	}).Prune()
+
+	RenderedPodServices = (render.RenderableNodes{
+		"ping/pongservice": {
+			ID:         test.ServiceID,
+			LabelMajor: "pongservice",
+			LabelMinor: "2 pods",
+			Rank:       test.ServiceID,
+			Pseudo:     false,
+			Origins: report.MakeIDList(
+				test.Client54001NodeID,
+				test.Client54002NodeID,
+				test.ClientProcess1NodeID,
+				test.ClientProcess2NodeID,
+				test.ClientHostNodeID,
+				test.ClientContainerNodeID,
+				test.ClientContainerImageNodeID,
+				test.ClientPodNodeID,
+				test.Server80NodeID,
+				test.ServerPodNodeID,
+				test.ServiceNodeID,
+				test.ServerProcessNodeID,
+				test.ServerContainerNodeID,
+				test.ServerHostNodeID,
+				test.ServerContainerImageNodeID,
+			),
+			Node: report.MakeNode().WithAdjacent(test.ServiceID), // ?? Shouldn't be adjacent to itself?
+			EdgeMetadata: report.EdgeMetadata{
+				EgressPacketCount:  newu64(30),
+				EgressByteCount:    newu64(300),
+				IngressPacketCount: newu64(210),
+				IngressByteCount:   newu64(2100),
+			},
+		},
+		uncontainedServerID: {
+			ID:         uncontainedServerID,
+			LabelMajor: render.UncontainedMajor,
+			LabelMinor: test.ServerHostName,
+			Rank:       "",
+			Pseudo:     true,
+			Origins: report.MakeIDList(
+				test.ServerHostNodeID,
+				test.NonContainerProcessNodeID,
+				test.NonContainerNodeID,
+			),
+			Node:         report.MakeNode().WithAdjacent(render.TheInternetID),
 			EdgeMetadata: report.EdgeMetadata{},
-			Origins:      report.MakeIDList(test.RandomAddressNodeID),
+		},
+		render.TheInternetID: {
+			ID:         render.TheInternetID,
+			LabelMajor: render.TheInternetMajor,
+			Pseudo:     true,
+			Node:       report.MakeNode().WithAdjacent(test.ServiceID),
+			EdgeMetadata: report.EdgeMetadata{
+				EgressPacketCount: newu64(60),
+				EgressByteCount:   newu64(600),
+			},
+			Origins: report.MakeIDList(
+				test.RandomClientNodeID,
+				test.GoogleEndpointNodeID,
+			),
 		},
 	}).Prune()
 )

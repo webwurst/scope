@@ -211,21 +211,6 @@ var PodRenderer = Map{
 // graph by merging the pods graph and the services topology.
 var PodServiceRenderer = Map{
 	MapFunc: MapCountPods,
-	/*
-		Renderer: Map{
-			MapFunc: MapService2Name,
-			Renderer: MakeReduce(
-				Map{
-					MapFunc:  MapPod2Service,
-					Renderer: PodRenderer,
-				},
-				Map{
-					MapFunc:  MapServiceIdentity,
-					Renderer: SelectService,
-				},
-			),
-		},
-	*/
 	Renderer: MakeReduce(
 		Map{
 			MapFunc:  MapPod2Service,

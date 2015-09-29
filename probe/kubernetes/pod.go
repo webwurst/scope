@@ -9,6 +9,7 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 )
 
+// These constants are keys used in node metadata
 const (
 	PodID           = "kubernetes_pod_id"
 	PodName         = "kubernetes_pod_name"
@@ -35,6 +36,7 @@ type pod struct {
 	Node       *api.Node
 }
 
+// NewPod creates a new Pod
 func NewPod(p *api.Pod) Pod {
 	return &pod{Pod: p}
 }

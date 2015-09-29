@@ -88,10 +88,12 @@ var (
 	UnknownAddress3NodeID = report.MakeAddressNodeID(ServerHostID, UnknownClient3IP)
 	RandomAddressNodeID   = report.MakeAddressNodeID(ServerHostID, RandomClientIP) // this should become an internet node
 
-	ClientPodID     = "ping/pong"
-	ServerPodID     = "wiff/waff"
-	ClientPodNodeID = report.MakePodNodeID(ClientHostID, ClientPodID)
-	ServerPodNodeID = report.MakePodNodeID(ServerHostID, ServerPodID)
+	ClientPodID     = "ping/pong-a"
+	ServerPodID     = "ping/pong-b"
+	ClientPodNodeID = report.MakePodNodeID("ping", "pong-a")
+	ServerPodNodeID = report.MakePodNodeID("ping", "pong-b")
+	ServiceID       = "ping/pongservice"
+	ServiceNodeID   = report.MakeServiceNodeID("ping", "pongservice")
 
 	Report = report.Report{
 		Endpoint: report.Topology{
@@ -297,16 +299,29 @@ var (
 		Pod: report.Topology{
 			Nodes: report.Nodes{
 				ClientPodNodeID: report.MakeNodeWith(map[string]string{
-					kubernetes.PodID:           "ping/pong",
-					kubernetes.PodName:         "pong",
+					kubernetes.PodID:           ClientPodID,
+					kubernetes.PodName:         "pong-a",
 					kubernetes.Namespace:       "ping",
 					kubernetes.PodContainerIDs: ClientContainerID,
+					kubernetes.ServiceIDs:      ServiceID,
 				}),
 				ServerPodNodeID: report.MakeNodeWith(map[string]string{
-					kubernetes.PodID:           "wiff/waff",
-					kubernetes.PodName:         "waff",
-					kubernetes.Namespace:       "wiff",
+					kubernetes.PodID:           ServerPodID,
+					kubernetes.PodName:         "pong-b",
+					kubernetes.Namespace:       "ping",
 					kubernetes.PodContainerIDs: ServerContainerID,
+					kubernetes.ServiceIDs:      ServiceID,
+				}),
+			},
+		},
+		Service: report.Topology{
+			Nodes: report.Nodes{
+				ServiceNodeID: report.MakeNodeWith(map[string]string{
+					kubernetes.ServiceID:    ServiceID,
+					kubernetes.ServiceName:  "pongservice",
+					kubernetes.Namespace:    "ping",
+					kubernetes.ServicePorts: "6379/TCP->6379",
+					kubernetes.ServiceIPs:   ServerIP,
 				}),
 			},
 		},

@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/weaveworks/scope/probe/docker"
@@ -260,13 +261,6 @@ func (f Filter) Stats(rpt report.Report) Stats {
 	return upstream
 }
 
-// not inverts a filter predicate
-func not(f func(r RenderableNode) bool) func(r RenderableNode) bool {
-	return func(r RenderableNode) bool {
-		return !f(r)
-	}
-}
-
 // IsConnected is the key added to Node.Metadata by ColorConnected
 // to indicate a node has an edge pointing to it or from it
 const IsConnected = "is_connected"
@@ -300,9 +294,11 @@ func FilterSystem(r Renderer) Renderer {
 				return false
 			}
 			if node.Metadata[kubernetes.Namespace] == "kube-system" {
+				fmt.Printf("[DEBUG] Filtered k8s pod/svc: %s %s\n", node.Metadata[kubernetes.PodID], node.Metadata[kubernetes.ServiceID])
 				return false
 			}
 			if strings.HasPrefix(node.Metadata[docker.LabelPrefix+"io.kubernetes.pod.name"], "kube-system/") {
+				fmt.Printf("[DEBUG] Filtered k8s container: %s\n", node.Metadata[docker.ContainerID])
 				return false
 			}
 			return true

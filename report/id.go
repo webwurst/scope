@@ -99,7 +99,7 @@ func MakePodNodeID(hostID, podID string) string {
 	return hostID + ScopeDelim + podID
 }
 
-// MakePodNodeID produces a pod node ID from its composite parts.
+// MakeServiceNodeID produces a service node ID from its composite parts.
 func MakeServiceNodeID(namespaceID, serviceID string) string {
 	return namespaceID + ScopeDelim + serviceID
 }

@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 )
 
+// These constants are keys used in node metadata
 const (
 	ServiceID      = "kubernetes_service_id"
 	ServiceName    = "kubernetes_service_name"
@@ -31,6 +32,7 @@ type service struct {
 	*api.Service
 }
 
+// NewService creates a new Service
 func NewService(s *api.Service) Service {
 	return &service{Service: s}
 }
