@@ -607,8 +607,13 @@ func MapContainer2Pod(n RenderableNode, _ report.Networks) RenderableNodes {
 	}
 
 	// Add container-<id> key to NMD, which will later be counted to produce the minor label
-	result := NewDerivedNode(id, n)
+	result := NewRenderableNodeWith(id, "", "", id, n)
 	result.Node.Counters[containersKey] = 1
+	if s := strings.SplitN(id, "/", 2); len(s) == 2 {
+		result.LabelMajor = s[1]
+		result.Node.Metadata[kubernetes.Namespace] = s[0]
+		result.Node.Metadata[kubernetes.PodName] = s[1]
+	}
 	return RenderableNodes{id: result}
 }
 
