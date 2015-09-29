@@ -10,6 +10,23 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 )
 
+const (
+	Namespace = "kubernetes_namespace"
+)
+
+// Vars exported for testing.
+var (
+	NewPodStub     = NewPod
+	NewServiceStub = NewService
+)
+
+// Client keeps track of running kubernetes pods and services
+type Client interface {
+	Stop()
+	WalkPods(f func(Pod) error) error
+	WalkServices(f func(Service) error) error
+}
+
 type client struct {
 	quit             chan struct{}
 	client           *unversioned.Client
@@ -47,18 +64,32 @@ func NewClient(addr string, resyncPeriod time.Duration) (Client, error) {
 	}, nil
 }
 
-func (c *client) ListPods() ([]*api.Pod, error) {
-	return c.podStore.List(labels.Everything())
+func (c *client) WalkPods(f func(Pod) error) error {
+	pods, err := c.podStore.List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods {
+		if err := f(NewPodStub(pod)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (c *client) ListServices() ([]*api.Service, error) {
+func (c *client) WalkServices(f func(Service) error) error {
 	list, err := c.serviceStore.List()
-	items := []*api.Service{}
-	for i := range list.Items {
-		items = append(items, &(list.Items[i]))
+	if err != nil {
+		return err
 	}
-	return items, err
+	for i := range list.Items {
+		if err := f(NewServiceStub(&(list.Items[i]))); err != nil {
+			return err
+		}
+	}
+	return nil
 }
+
 func (c *client) Stop() {
 	close(c.quit)
 }

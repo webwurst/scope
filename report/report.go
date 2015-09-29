@@ -75,6 +75,7 @@ func MakeReport() Report {
 		ContainerImage: MakeTopology(),
 		Host:           MakeTopology(),
 		Pod:            MakeTopology(),
+		Service:        MakeTopology(),
 		Overlay:        MakeTopology(),
 		Sampling:       Sampling{},
 		Window:         0,

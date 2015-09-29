@@ -57,20 +57,21 @@ func (s *service) GetNode() report.Node {
 		ServiceName:    s.Name(),
 		ServiceCreated: s.ObjectMeta.CreationTimestamp.Format(time.RFC822),
 		Namespace:      s.Namespace(),
-		ServicePorts:   s.ports(),
+		ServicePorts:   strings.Join(s.ports(), ""),
 		ServiceIPs:     strings.Join(s.ips(), " "),
 	})
 }
 
-func (s *service) ports() string {
-	if ports := s.Spec.Ports; len(ports) > 0 {
-		forwards := []string{}
-		for _, port := range ports {
-			forwards = append(forwards, fmt.Sprintf("%d/%s->%s", port.Port, port.Protocol, port.TargetPort.String()))
+func (s *service) ports() []string {
+	result := []string{}
+	for _, port := range s.Spec.Ports {
+		targetPort := port.TargetPort.String()
+		if targetPort == "" || targetPort == "0" {
+			targetPort = fmt.Sprint(port.Port)
 		}
-		return strings.Join(forwards, " ")
+		result = append(result, fmt.Sprintf("%d/%s->%s", port.Port, port.Protocol, targetPort))
 	}
-	return ""
+	return result
 }
 
 func (s *service) ips() []string {

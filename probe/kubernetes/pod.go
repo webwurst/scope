@@ -23,6 +23,7 @@ type Pod interface {
 	Name() string
 	Namespace() string
 	ContainerIDs() []string
+	Created() string
 	AddServiceID(id string)
 	Labels() labels.Labels
 	GetNode() report.Node

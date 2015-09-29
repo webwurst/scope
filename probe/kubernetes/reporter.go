@@ -6,13 +6,13 @@ import (
 
 // Reporter generate Reports containing Container and ContainerImage topologies
 type Reporter struct {
-	registry Registry
+	client Client
 }
 
 // NewReporter makes a new Reporter
-func NewReporter(registry Registry) *Reporter {
+func NewReporter(client Client) *Reporter {
 	return &Reporter{
-		registry: registry,
+		client: client,
 	}
 }
 
@@ -37,8 +37,8 @@ func (r *Reporter) serviceTopology() (report.Topology, []Service, error) {
 		result   = report.MakeTopology()
 		services = []Service{}
 	)
-	err := r.registry.WalkServices(func(s Service) error {
-		nodeID := report.MakeServiceNodeID(s.Namespace(), s.ID())
+	err := r.client.WalkServices(func(s Service) error {
+		nodeID := report.MakeServiceNodeID(s.Namespace(), s.Name())
 		result.Nodes[nodeID] = s.GetNode()
 		services = append(services, s)
 		return nil
@@ -48,13 +48,13 @@ func (r *Reporter) serviceTopology() (report.Topology, []Service, error) {
 
 func (r *Reporter) podTopology(services []Service) (report.Topology, error) {
 	result := report.MakeTopology()
-	err := r.registry.WalkPods(func(p Pod) error {
+	err := r.client.WalkPods(func(p Pod) error {
 		for _, service := range services {
 			if service.Selector().Matches(p.Labels()) {
 				p.AddServiceID(service.ID())
 			}
 		}
-		nodeID := report.MakePodNodeID(p.Namespace(), p.ID())
+		nodeID := report.MakePodNodeID(p.Namespace(), p.Name())
 		result.Nodes[nodeID] = p.GetNode()
 		return nil
 	})

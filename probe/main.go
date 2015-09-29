@@ -140,13 +140,13 @@ func main() {
 	}
 
 	if *kubernetesEnabled {
-		kubernetesRegistry, err := kubernetes.NewRegistry(*kubernetesAPI, *kubernetesInterval)
+		client, err := kubernetes.NewClient(*kubernetesAPI, *kubernetesInterval)
 		if err != nil {
-			log.Fatalf("failed to start kubernetes registry: %v", err)
+			log.Fatalf("Kubernetes: failed to start client: %v", err)
 		}
-		defer kubernetesRegistry.Stop()
+		defer client.Stop()
 
-		reporters = append(reporters, kubernetes.NewReporter(kubernetesRegistry))
+		reporters = append(reporters, kubernetes.NewReporter(client))
 	}
 
 	if *weaveRouterAddr != "" {
