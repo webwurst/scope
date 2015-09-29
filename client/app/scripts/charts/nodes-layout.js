@@ -27,6 +27,17 @@ const getConstraints = function(nodes, scale) {
   return constraints;
 };
 
+const getGroups = function(nodes) {
+  const nodesByRank = _.groupBy(nodes, 'rank');
+  const groups = [];
+  _.each(nodesByRank, function(rankNodes, rank) {
+    if (rank) {
+      groups.push({leaves: _.pluck(rankNodes, 'index')});
+    }
+  });
+  return groups;
+};
+
 const doLayout = function(nodes, edges, width, height, scale) {
   if (_.size(nodes) > MAX_NODES) {
     debug('Too many nodes to lay out.');
@@ -55,15 +66,17 @@ const doLayout = function(nodes, edges, width, height, scale) {
   });
 
   const constraints = getConstraints(nodes, scale);
+  const groups = getGroups(nodeList);
 
-  debug('graph layout constraints', constraints);
+  debug('graph layout constraints', constraints, 'groups', groups);
 
   cola
     .nodes(nodeList)
     .links(edgeList)
     .constraints(constraints)
+    .groups(groups)
     .flowLayout('y', scale(0.5))
-    .start(16, 8, 0);
+    .start(16, 8, 0, 0);
 
   debug('graph layout done');
 
