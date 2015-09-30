@@ -34,6 +34,8 @@ type topologyStats struct {
 // makeTopologyList returns a handler that yields an APITopologyList.
 func makeTopologyList(rep xfer.Reporter) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		topologyRegistryLock.RLock()
+		defer topologyRegistryLock.RUnlock()
 		var (
 			rpt        = rep.Report()
 			topologies = []APITopologyDesc{}

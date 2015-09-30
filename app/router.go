@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/ghost/handlers"
 	"github.com/gorilla/mux"
@@ -96,6 +97,9 @@ func makeReportPostHandler(a xfer.Adder) http.HandlerFunc {
 			return
 		}
 		a.Add(rpt)
+		if len(rpt.Pod.Nodes) > 0 {
+			addKubernetesTopologies()
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -113,6 +117,8 @@ func decorateTopologyForRequest(r *http.Request, topology *topologyView) {
 
 func captureTopology(rep xfer.Reporter, f func(xfer.Reporter, topologyView, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		topologyRegistryLock.RLock()
+		defer topologyRegistryLock.RUnlock()
 		topology, ok := topologyRegistry[mux.Vars(r)["topology"]]
 		if !ok {
 			http.NotFound(w, r)
@@ -135,6 +141,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 
 // Topology option labels should tell the current state. The first item must
 // be the verb to get to that state
+var topologyRegistryLock sync.RWMutex
 var topologyRegistry = map[string]topologyView{
 	"applications": {
 		human:    "Applications",
@@ -178,24 +185,6 @@ var topologyRegistry = map[string]topologyView{
 		parent:   "",
 		renderer: render.HostRenderer,
 	},
-	"pods": {
-		human:    "Pods",
-		parent:   "",
-		renderer: render.PodRenderer,
-		options: optionParams{"system": {
-			{"show", "System containers shown", false, nop},
-			{"hide", "System containers hidden", true, render.FilterSystem},
-		}},
-	},
-	"pods-by-service": {
-		human:    "by service",
-		parent:   "pods",
-		renderer: render.PodServiceRenderer,
-		options: optionParams{"system": {
-			{"show", "System containers shown", false, nop},
-			{"hide", "System containers hidden", true, render.FilterSystem},
-		}},
-	},
 }
 
 type topologyView struct {
@@ -215,3 +204,31 @@ type optionValue struct {
 }
 
 func nop(r render.Renderer) render.Renderer { return r }
+
+func addKubernetesTopologies() {
+	topologyRegistryLock.Lock()
+	defer topologyRegistryLock.Unlock()
+	ts := map[string]topologyView{
+		"pods": {
+			human:    "Pods",
+			parent:   "",
+			renderer: render.PodRenderer,
+			options: optionParams{"system": {
+				{"show", "System containers shown", false, nop},
+				{"hide", "System containers hidden", true, render.FilterSystem},
+			}},
+		},
+		"pods-by-service": {
+			human:    "by service",
+			parent:   "pods",
+			renderer: render.PodServiceRenderer,
+			options: optionParams{"system": {
+				{"show", "System containers shown", false, nop},
+				{"hide", "System containers hidden", true, render.FilterSystem},
+			}},
+		},
+	}
+	for name, t := range ts {
+		topologyRegistry[name] = t
+	}
+}
