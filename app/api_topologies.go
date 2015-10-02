@@ -34,13 +34,12 @@ type topologyStats struct {
 // makeTopologyList returns a handler that yields an APITopologyList.
 func makeTopologyList(rep xfer.Reporter) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		topologyRegistryLock.RLock()
-		defer topologyRegistryLock.RUnlock()
 		var (
 			rpt        = rep.Report()
+			registered = topologyRegistry.list()
 			topologies = []APITopologyDesc{}
 		)
-		for name, def := range topologyRegistry {
+		for name, def := range registered {
 			// Don't show sub-topologies at the top level.
 			if def.parent != "" {
 				continue
@@ -49,7 +48,7 @@ func makeTopologyList(rep xfer.Reporter) func(w http.ResponseWriter, r *http.Req
 
 			// Collect all sub-topologies of this one, depth=1 only.
 			subTopologies := []APITopologyDesc{}
-			for subName, subDef := range topologyRegistry {
+			for subName, subDef := range registered {
 				if subDef.parent == name {
 					decorateTopologyForRequest(r, &subDef)
 					subTopologies = append(subTopologies, APITopologyDesc{

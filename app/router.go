@@ -98,7 +98,7 @@ func makeReportPostHandler(a xfer.Adder) http.HandlerFunc {
 		}
 		a.Add(rpt)
 		if len(rpt.Pod.Nodes) > 0 {
-			addKubernetesTopologies()
+			enableKubernetesTopologies()
 		}
 		w.WriteHeader(http.StatusOK)
 	}
@@ -117,9 +117,7 @@ func decorateTopologyForRequest(r *http.Request, topology *topologyView) {
 
 func captureTopology(rep xfer.Reporter, f func(xfer.Reporter, topologyView, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		topologyRegistryLock.RLock()
-		defer topologyRegistryLock.RUnlock()
-		topology, ok := topologyRegistry[mux.Vars(r)["topology"]]
+		topology, ok := topologyRegistry.get(mux.Vars(r)["topology"])
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -139,51 +137,84 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	respondWith(w, http.StatusOK, APIDetails{ID: uniqueID, Version: version})
 }
 
+// registry is a threadsafe store of the available topologies
+type registry struct {
+	sync.RWMutex
+	items map[string]topologyView
+}
+
+func (r *registry) add(ts map[string]topologyView) {
+	r.Lock()
+	defer r.Unlock()
+	result := map[string]topologyView{}
+	for name, t := range r.items {
+		result[name] = t
+	}
+	for name, t := range ts {
+		result[name] = t
+	}
+	r.items = result
+}
+
+func (r *registry) get(name string) (topologyView, bool) {
+	r.RLock()
+	defer r.RUnlock()
+	t, ok := r.items[name]
+	return t, ok
+}
+
+func (r *registry) list() map[string]topologyView {
+	r.RLock()
+	defer r.RUnlock()
+	return r.items
+}
+
 // Topology option labels should tell the current state. The first item must
 // be the verb to get to that state
-var topologyRegistryLock sync.RWMutex
-var topologyRegistry = map[string]topologyView{
-	"applications": {
-		human:    "Applications",
-		parent:   "",
-		renderer: render.FilterUnconnected(render.ProcessWithContainerNameRenderer),
-		options: optionParams{"unconnected": {
-			// Show the user why there are filtered nodes in this view.
-			// Don't give them the option to show those nodes.
-			{"hide", "Unconnected nodes hidden", true, nop},
-		}},
-	},
-	"applications-by-name": {
-		human:    "by name",
-		parent:   "applications",
-		renderer: render.FilterUnconnected(render.ProcessNameRenderer),
-		options: optionParams{"unconnected": {
-			// Ditto above.
-			{"hide", "Unconnected nodes hidden", true, nop},
-		}},
-	},
-	"containers": {
-		human:    "Containers",
-		parent:   "",
-		renderer: render.ContainerWithImageNameRenderer,
-		options: optionParams{"system": {
-			{"show", "System containers shown", false, nop},
-			{"hide", "System containers hidden", true, render.FilterSystem},
-		}},
-	},
-	"containers-by-image": {
-		human:    "by image",
-		parent:   "containers",
-		renderer: render.ContainerImageRenderer,
-		options: optionParams{"system": {
-			{"show", "System containers shown", false, nop},
-			{"hide", "System containers hidden", true, render.FilterSystem},
-		}},
-	},
-	"hosts": {
-		human:    "Hosts",
-		parent:   "",
-		renderer: render.HostRenderer,
+var topologyRegistry = &registry{
+	items: map[string]topologyView{
+		"applications": {
+			human:    "Applications",
+			parent:   "",
+			renderer: render.FilterUnconnected(render.ProcessWithContainerNameRenderer),
+			options: optionParams{"unconnected": {
+				// Show the user why there are filtered nodes in this view.
+				// Don't give them the option to show those nodes.
+				{"hide", "Unconnected nodes hidden", true, nop},
+			}},
+		},
+		"applications-by-name": {
+			human:    "by name",
+			parent:   "applications",
+			renderer: render.FilterUnconnected(render.ProcessNameRenderer),
+			options: optionParams{"unconnected": {
+				// Ditto above.
+				{"hide", "Unconnected nodes hidden", true, nop},
+			}},
+		},
+		"containers": {
+			human:    "Containers",
+			parent:   "",
+			renderer: render.ContainerWithImageNameRenderer,
+			options: optionParams{"system": {
+				{"show", "System containers shown", false, nop},
+				{"hide", "System containers hidden", true, render.FilterSystem},
+			}},
+		},
+		"containers-by-image": {
+			human:    "by image",
+			parent:   "containers",
+			renderer: render.ContainerImageRenderer,
+			options: optionParams{"system": {
+				{"show", "System containers shown", false, nop},
+				{"hide", "System containers hidden", true, render.FilterSystem},
+			}},
+		},
+		"hosts": {
+			human:    "Hosts",
+			parent:   "",
+			renderer: render.HostRenderer,
+		},
 	},
 }
 
@@ -205,30 +236,27 @@ type optionValue struct {
 
 func nop(r render.Renderer) render.Renderer { return r }
 
-func addKubernetesTopologies() {
-	topologyRegistryLock.Lock()
-	defer topologyRegistryLock.Unlock()
-	ts := map[string]topologyView{
-		"pods": {
-			human:    "Pods",
-			parent:   "",
-			renderer: render.PodRenderer,
-			options: optionParams{"system": {
-				{"show", "System containers shown", false, nop},
-				{"hide", "System containers hidden", true, render.FilterSystem},
-			}},
-		},
-		"pods-by-service": {
-			human:    "by service",
-			parent:   "pods",
-			renderer: render.PodServiceRenderer,
-			options: optionParams{"system": {
-				{"show", "System containers shown", false, nop},
-				{"hide", "System containers hidden", true, render.FilterSystem},
-			}},
-		},
-	}
-	for name, t := range ts {
-		topologyRegistry[name] = t
-	}
+func enableKubernetesTopologies() {
+	topologyRegistry.add(kubernetesTopologies)
+}
+
+var kubernetesTopologies = map[string]topologyView{
+	"pods": {
+		human:    "Pods",
+		parent:   "",
+		renderer: render.PodRenderer,
+		options: optionParams{"system": {
+			{"show", "System containers shown", false, nop},
+			{"hide", "System containers hidden", true, render.FilterSystem},
+		}},
+	},
+	"pods-by-service": {
+		human:    "by service",
+		parent:   "pods",
+		renderer: render.PodServiceRenderer,
+		options: optionParams{"system": {
+			{"show", "System containers shown", false, nop},
+			{"hide", "System containers hidden", true, render.FilterSystem},
+		}},
+	},
 }
