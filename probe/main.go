@@ -40,7 +40,7 @@ func main() {
 		dockerBridge       = flag.String("docker.bridge", "docker0", "the docker bridge name")
 		kubernetesEnabled  = flag.Bool("kubernetes", false, "collect kubernetes-related attributes for containers, should only be enabled on the master node")
 		kubernetesAPI      = flag.String("kubernetes.api", "http://localhost:8080", "Address of kubernetes master api")
-		kubernetesInterval = flag.Duration("kubernetes.interval", 10*time.Second, "how often to update Kubernetes attributes")
+		kubernetesInterval = flag.Duration("kubernetes.interval", 10*time.Second, "how often to do a full resync of the kubernetes data")
 		weaveRouterAddr    = flag.String("weave.router.addr", "", "IP address or FQDN of the Weave router")
 		procRoot           = flag.String("proc.root", "/proc", "location of the proc filesystem")
 		printVersion       = flag.Bool("version", false, "print version number and exit")
@@ -142,11 +142,11 @@ func main() {
 	if *kubernetesEnabled {
 		client, err := kubernetes.NewClient(*kubernetesAPI, *kubernetesInterval)
 		if err != nil {
-			log.Fatalf("Kubernetes: failed to start client: %v", err)
+			log.Printf("Kubernetes: failed to start client: %v", err)
+		} else {
+			defer client.Stop()
+			reporters = append(reporters, kubernetes.NewReporter(client))
 		}
-		defer client.Stop()
-
-		reporters = append(reporters, kubernetes.NewReporter(client))
 	}
 
 	if *weaveRouterAddr != "" {

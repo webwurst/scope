@@ -39,7 +39,7 @@ func (r *Reporter) serviceTopology() (report.Topology, []Service, error) {
 	)
 	err := r.client.WalkServices(func(s Service) error {
 		nodeID := report.MakeServiceNodeID(s.Namespace(), s.Name())
-		result.Nodes[nodeID] = s.GetNode()
+		result = result.AddNode(nodeID, s.GetNode())
 		services = append(services, s)
 		return nil
 	})
@@ -55,7 +55,7 @@ func (r *Reporter) podTopology(services []Service) (report.Topology, error) {
 			}
 		}
 		nodeID := report.MakePodNodeID(p.Namespace(), p.Name())
-		result.Nodes[nodeID] = p.GetNode()
+		result = result.AddNode(nodeID, p.GetNode())
 		return nil
 	})
 	return result, err

@@ -19,9 +19,6 @@ const (
 	UncontainedID    = "uncontained"
 	UncontainedMajor = "Uncontained"
 
-	UnmanagedID    = "unmanaged"
-	UnmanagedMajor = "Unmanaged"
-
 	TheInternetID    = "theinternet"
 	TheInternetMajor = "The Internet"
 
@@ -311,30 +308,6 @@ func MapContainer2IP(m RenderableNode, _ report.Networks) RenderableNodes {
 	return result
 }
 
-// MapKubeProxy2IP maps the kube-proxy process to it's IP addresses (outputs
-// multiple nodes).  This allows container to be joined directly with the
-// endpoint topology. All Kubernetes service traffic goes through kube-proxy,
-// so we split it up, because that is not a helpful thing to display in the
-// kubernetes view.
-func MapKubeProxy2IP(m RenderableNode, _ report.Networks) RenderableNodes {
-	// Drop any non-kube-proxy nodes
-	if m.Metadata[process.Comm] != "kube-proxy" {
-		return RenderableNodes{}
-	}
-
-	result := RenderableNodes{}
-	addrs, ok := m.Metadata[docker.ContainerIPs]
-	if !ok {
-		return result
-	}
-	for _, addr := range strings.Fields(addrs) {
-		n := NewRenderableNodeWith(addr, "", "", "", m)
-		n.Node.Counters[containersKey] = 1
-		result[addr] = n
-	}
-	return result
-}
-
 // MapIP2Container maps IP nodes produced from MapContainer2IP back to
 // container nodes.  If there is more than one container with a given
 // IP, it is dropped.
@@ -510,8 +483,8 @@ func MapPod2Service(n RenderableNode, _ report.Networks) RenderableNodes {
 		return RenderableNodes{n.ID: n}
 	}
 
-	// Otherwise, if some some reason the container doesn't have a service_ids
-	// (maybe slightly out of sync reports), just drop it
+	// Otherwise, if some some reason the pod doesn't have a service_ids (maybe
+	// slightly out of sync reports, or its not in a service), just drop it
 	ids, ok := n.Node.Metadata[kubernetes.ServiceIDs]
 	if !ok {
 		return RenderableNodes{}
@@ -559,29 +532,6 @@ func MapContainerImage2Name(n RenderableNode, _ report.Networks) RenderableNodes
 	return RenderableNodes{name: node}
 }
 
-// MapService2Name maps container images RenderableNodes to
-// RenderableNodes for each service name.
-//
-// This mapper is unlike the other foo2bar mappers as the intention
-// is not to join the information with another topology.  Therefore
-// it outputs a properly-formed node with labels etc.
-func MapService2Name(n RenderableNode, _ report.Networks) RenderableNodes {
-	if n.Pseudo {
-		return RenderableNodes{n.ID: n}
-	}
-
-	name, ok := n.Node.Metadata[kubernetes.ServiceName]
-	if !ok {
-		return RenderableNodes{}
-	}
-
-	node := NewDerivedNode(name, n)
-	node.LabelMajor = name
-	node.Rank = name
-	node.Node = n.Node.Copy() // Propagate NMD for pod counting.
-	return RenderableNodes{name: node}
-}
-
 // MapContainer2Pod maps container RenderableNodes to pod
 // RenderableNodes.
 //
@@ -599,16 +549,20 @@ func MapContainer2Pod(n RenderableNode, _ report.Networks) RenderableNodes {
 		return RenderableNodes{n.ID: n}
 	}
 
-	// Otherwise, if some some reason the container doesn't have a pod_id
-	// (maybe slightly out of sync reports), just drop it
+	// Otherwise, if some some reason the container doesn't have a pod_id (maybe
+	// slightly out of sync reports, or its not in a pod), just drop it
 	id, ok := n.Node.Metadata["docker_label_io.kubernetes.pod.name"]
 	if !ok {
 		return RenderableNodes{}
 	}
 
-	// Add container-<id> key to NMD, which will later be counted to produce the minor label
+	// Add container-<id> key to NMD, which will later be counted to produce the
+	// minor label
 	result := NewRenderableNodeWith(id, "", "", id, n)
 	result.Node.Counters[containersKey] = 1
+	// Due to a bug in kubernetes, addon pods on the master node are not returned
+	// from the API. This is a workaround until
+	// https://github.com/kubernetes/kubernetes/issues/14738 is fixed.
 	if s := strings.SplitN(id, "/", 2); len(s) == 2 {
 		result.LabelMajor = s[1]
 		result.Node.Metadata[kubernetes.Namespace] = s[0]

@@ -1,7 +1,6 @@
 package render
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/weaveworks/scope/probe/docker"
@@ -294,11 +293,9 @@ func FilterSystem(r Renderer) Renderer {
 				return false
 			}
 			if node.Metadata[kubernetes.Namespace] == "kube-system" {
-				fmt.Printf("[DEBUG] Filtered k8s pod/svc: %s %s\n", node.Metadata[kubernetes.PodID], node.Metadata[kubernetes.ServiceID])
 				return false
 			}
 			if strings.HasPrefix(node.Metadata[docker.LabelPrefix+"io.kubernetes.pod.name"], "kube-system/") {
-				fmt.Printf("[DEBUG] Filtered k8s container: %s\n", node.Metadata[docker.ContainerID])
 				return false
 			}
 			return true
