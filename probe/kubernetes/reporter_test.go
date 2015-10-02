@@ -138,8 +138,6 @@ func TestReporter(t *testing.T) {
 				kubernetes.ServiceName:    "pongservice",
 				kubernetes.Namespace:      "ping",
 				kubernetes.ServiceCreated: pod1.Created(),
-				kubernetes.ServicePorts:   "6379/TCP->6379",
-				kubernetes.ServiceIPs:     "10.0.1.1 10.0.1.2",
 			}),
 		},
 	}

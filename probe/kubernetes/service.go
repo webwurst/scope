@@ -1,8 +1,6 @@
 package kubernetes
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/weaveworks/scope/report"
@@ -15,8 +13,6 @@ const (
 	ServiceID      = "kubernetes_service_id"
 	ServiceName    = "kubernetes_service_name"
 	ServiceCreated = "kubernetes_service_created"
-	ServicePorts   = "kubernetes_service_ports"
-	ServiceIPs     = "kubernetes_service_ips"
 )
 
 // Service represents a Kubernetes service
@@ -59,47 +55,5 @@ func (s *service) GetNode() report.Node {
 		ServiceName:    s.Name(),
 		ServiceCreated: s.ObjectMeta.CreationTimestamp.Format(time.RFC822),
 		Namespace:      s.Namespace(),
-		ServicePorts:   strings.Join(s.ports(), ""),
-		ServiceIPs:     strings.Join(s.ips(), " "),
 	})
-}
-
-func (s *service) ports() []string {
-	result := []string{}
-	for _, port := range s.Spec.Ports {
-		targetPort := port.TargetPort.String()
-		if targetPort == "" || targetPort == "0" {
-			targetPort = fmt.Sprint(port.Port)
-		}
-		result = append(result, fmt.Sprintf("%d/%s->%s", port.Port, port.Protocol, targetPort))
-	}
-	return result
-}
-
-func (s *service) ips() []string {
-	ips := []string{s.Spec.ClusterIP}
-	if s.Spec.Type == api.ServiceTypeClusterIP {
-		return ips
-	}
-
-	// TODO: Get node ips here
-	nodeIPs := []string{}
-	ips = append(ips, nodeIPs...)
-	if s.Spec.Type == api.ServiceTypeNodePort {
-		return ips
-	}
-
-	ips = append(ips, s.Spec.ExternalIPs...)
-	if s.Spec.LoadBalancerIP != "" {
-		ips = append(ips, s.Spec.LoadBalancerIP)
-	}
-
-	for _, ingress := range s.Status.LoadBalancer.Ingress {
-		if ingress.IP != "" {
-			ips = append(ips, ingress.IP)
-		} else if ingress.Hostname != "" {
-			ips = append(ips, ingress.Hostname)
-		}
-	}
-	return ips
 }

@@ -317,11 +317,9 @@ var (
 		Service: report.Topology{
 			Nodes: report.Nodes{
 				ServiceNodeID: report.MakeNodeWith(map[string]string{
-					kubernetes.ServiceID:    ServiceID,
-					kubernetes.ServiceName:  "pongservice",
-					kubernetes.Namespace:    "ping",
-					kubernetes.ServicePorts: "6379/TCP->6379",
-					kubernetes.ServiceIPs:   ServerIP,
+					kubernetes.ServiceID:   ServiceID,
+					kubernetes.ServiceName: "pongservice",
+					kubernetes.Namespace:   "ping",
 				}),
 			},
 		},
